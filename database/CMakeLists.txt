@@ -1,0 +1,39 @@
+cmake_minimum_required(VERSION 3.16)
+
+set(CMAKE_C_COMPILER gcc)
+set(CMAKE_CXX_COMPILER g++)
+
+project(StudHib_CPP) #имя проекта
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+include(FindPkgConfig)
+
+#disable picojson
+add_compile_definitions(JWT_DISABLE_PICOJSON)
+
+if(DEFINED CMAKE_TOOLCHAIN_FILE)
+    message(STATUS "Using vcpkg toolchain: ${CMAKE_TOOLCHAIN_FILE}")
+endif()
+
+# pkg_check_modules(PQXX REQUIRED libpqxx)
+# pkg_check_modules(LIBPQ REQUIRED libpq)
+find_package(nlohmann_json CONFIG REQUIRED)
+
+pkg_check_modules(PQXX REQUIRED libpqxx)
+pkg_check_modules(LIBPQ REQUIRED libpq)
+
+include_directories(/usr/local/include)
+include_directories(${LIBPQ_INCLUDE_DIRS} ${PQXX_INCLUDE_DIRS})
+link_directories(${LIBPQ_LIBRARY_DIRS})
+add_executable(core
+    main.cpp
+    user/users_permissions.h
+)
+
+target_link_libraries(core
+    ${PQXX_LIBRARIES}
+    ${LIBPQ_LIBRARIES}
+    nlohmann_json::nlohmann_json
+)
