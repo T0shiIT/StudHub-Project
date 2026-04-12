@@ -1,0 +1,71 @@
+{
+    "checksum": "52715adced6a8b1ab8f99eb353d3beb923899c795e1ec3646b0322284032f8c1",
+    "data": {
+    "id": "1d70c3cb-2883-4a13-a095-02267992d276",
+    "createdAt": 1775988764479,
+    "updatedAt": 1775988769418,
+    "title": "1",
+    "messages": [
+        {
+            "id": "8c7222d5-66d8-456c-ae26-4ef21acbdb13",
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "1"
+                }
+            ],
+            "context": {
+                "currentFile": {
+                    "fsPath": "E:/ideaprojects/StudHub-Project/backend/src/main/java/com/studhub/StudHubApplication.java"
+                }
+            },
+            "createdAt": 1775988764506,
+            "isInternal": false,
+            "rawContent": {
+                "type": "doc",
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "1"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "autoAppliedRules": []
+        },
+        {
+            "id": "c3d353e5-f58d-4c8f-9348-da651803c464",
+            "role": "system",
+            "content": [
+                {
+                    "type": "errorText",
+                    "text": "npx was not found in PATH. Install Node.js (includes npm/npx), or ensure npm is available.",
+                    "actions": [
+                        {
+                            "type": "externalAction",
+                            "title": "Regenerate",
+                            "action": "regenerateLastAnswer"
+                        }
+                    ]
+                }
+            ],
+            "createdAt": 1775988769418,
+            "isInternal": false
+        }
+    ],
+    "isAgent": true,
+    "isCustomAgent": false,
+    "isUnitTestsAgent": false,
+    "isE2EAgent": false,
+    "isWebDevAgent": false,
+    "isQnaAgent": false,
+    "model": "claude-sonnet-4-6",
+    "agentsRuntime": "claude-code",
+    "lastUserMessageAt": 1775988764506
+}
+}

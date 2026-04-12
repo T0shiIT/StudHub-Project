@@ -1,0 +1,164 @@
+{
+    "checksum": "28f99aa8639ac719c75483b9174db28ebce1b61376ba48a50b846a05efe01e31",
+    "data": {
+    "id": "bfb9fd6e-1231-4bff-9d56-f32e397b9d43",
+    "createdAt": 1775988483276,
+    "updatedAt": 1775988703090,
+    "title": "@init  collect information about this repo and ...",
+    "messages": [
+        {
+            "id": "7dc5bdb2-a707-489a-a27c-9319cd0481dd",
+            "role": "user",
+            "content": [
+                {
+                    "type": "skillMention",
+                    "skillName": "init"
+                },
+                {
+                    "type": "text",
+                    "text": " collect information about this repo and save to AGENTS.md file in project root"
+                }
+            ],
+            "context": {
+                "currentFile": {
+                    "fsPath": "E:/ideaprojects/StudHub-Project/backend/src/main/java/com/studhub/StudHubApplication.java"
+                }
+            },
+            "createdAt": 1775988483334,
+            "isInternal": false,
+            "rawContent": {
+                "type": "doc",
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "/init collect information about this repo and save to AGENTS.md file in project root"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "autoAppliedRules": []
+        },
+        {
+            "id": "ae69a833-eeac-42ac-97d4-c579e2adc140",
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "The request was interrupted due to an error, continue from where you left off"
+                }
+            ],
+            "createdAt": 1775988532735,
+            "isInternal": true,
+            "isHidden": true
+        },
+        {
+            "id": "5b57b1b0-41a2-4af3-a648-99371569ba96",
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Реализуй Oauth2 авторизацию через Яндекс"
+                }
+            ],
+            "context": {
+                "currentFile": {
+                    "fsPath": "E:/ideaprojects/StudHub-Project/backend/pom.xml"
+                }
+            },
+            "createdAt": 1775988651471,
+            "isInternal": false,
+            "rawContent": {
+                "type": "doc",
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Реализуй Oauth2 авторизацию через Яндекс"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "autoAppliedRules": []
+        },
+        {
+            "id": "c5233bfd-abae-4bff-a400-83d31c2d1c19",
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "The request was interrupted due to an error, continue from where you left off"
+                }
+            ],
+            "createdAt": 1775988661052,
+            "isInternal": true,
+            "isHidden": true
+        },
+        {
+            "id": "ffe4bdbe-64b7-40f9-b381-4a101712e221",
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Реализуй Oauth2 авторизацию через Яндекс"
+                }
+            ],
+            "context": {
+                "currentFile": {
+                    "fsPath": "E:/ideaprojects/StudHub-Project/backend/pom.xml"
+                }
+            },
+            "createdAt": 1775988696199,
+            "isInternal": false,
+            "rawContent": {
+                "type": "doc",
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Реализуй Oauth2 авторизацию через Яндекс"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "autoAppliedRules": []
+        },
+        {
+            "id": "a39ca932-028d-4e5c-8a4f-2547effc49fd",
+            "role": "system",
+            "content": [
+                {
+                    "type": "errorText",
+                    "text": "Something went wrong. Please try again later",
+                    "actions": [
+                        {
+                            "type": "externalAction",
+                            "title": "Regenerate",
+                            "action": "regenerateLastAnswer"
+                        }
+                    ]
+                }
+            ],
+            "createdAt": 1775988703090,
+            "isInternal": false
+        }
+    ],
+    "isAgent": true,
+    "isCustomAgent": false,
+    "isUnitTestsAgent": false,
+    "isE2EAgent": false,
+    "isWebDevAgent": false,
+    "isQnaAgent": false,
+    "model": "sonnet-4-6-think",
+    "lastUserMessageAt": 1775988696199
+}
+}
