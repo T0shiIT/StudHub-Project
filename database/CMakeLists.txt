@@ -30,6 +30,7 @@ link_directories(${LIBPQ_LIBRARY_DIRS})
 add_executable(core
     main.cpp
     user/users_permissions.h
+    handlers/new_user.cpp
 )
 
 target_link_libraries(core
