@@ -15,7 +15,7 @@ export default function Profile() {
   if (!isAuthenticated) {
     return (
       <div style={{ textAlign: 'center', padding: '40px' }}>
-        <h2>👤 Профиль</h2>
+        <h2>Профиль</h2>
         <p style={{ color: '#64748b', marginTop: '16px' }}>
           Для просмотра профиля необходимо{' '}
           <Link to="/login" style={{ color: '#3b82f6' }}>авторизоваться</Link>

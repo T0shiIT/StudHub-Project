@@ -1,7 +1,9 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { AuthProvider } from './context/AuthContext' // ← Убедись, что путь верный
+import { AuthProvider } from './context/AuthContext'
 import Layout from './components/layout'
 import Login from './pages/login'
+import Register from './pages/register'
+import RegisterSuccess from './pages/registersuccess'
 import Welcome from './pages/welcome'
 import Schedule from './pages/schedule'
 import Grades from './pages/grades'
@@ -10,11 +12,15 @@ import Profile from './pages/profile'
 
 function App() {
   return (
-    // Оборачиваем всё приложение в провайдер авторизации
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          {/* Публичные маршруты авторизации */}
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/register-success" element={<RegisterSuccess />} />
+          
+          {/* Защищённые маршруты приложения */}
           <Route path="/" element={<Layout />}>
             <Route index element={<Welcome />} />
             <Route path="schedule" element={<Schedule />} />
