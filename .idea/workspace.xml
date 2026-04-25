@@ -5,19 +5,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="c76f23f5-aa8a-4f0f-b159-f2b693305ff3" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/backend/pom.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/studhub/SecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/studhub/SecurityConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/studhub/TestController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/studhub/TestController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/studhub/auth/AuthController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/studhub/auth/AuthController.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/resources/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/handlers/new_user.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/database/handlers/new_user.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/handlers/new_user.h" beforeDir="false" afterPath="$PROJECT_DIR$/database/handlers/new_user.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/main.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/database/main.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docker-compose.yml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/context/AuthContext.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/context/AuthContext.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/pages/profile.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/pages/profile.tsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/src/pages/register.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/pages/register.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/pages/registersuccess.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/pages/registersuccess.tsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -31,6 +25,9 @@
   &quot;associatedIndex&quot;: 5
 }</component>
   <component name="ProjectId" id="3CD37Vuj224cneug1rk79GTow3U" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="1" id="Add" />
+  </component>
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
@@ -40,6 +37,7 @@
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;agent.project.rule.migration.done&quot;: &quot;true&quot;,
     &quot;dev.sweep.assistant.data.RecentlyUsedFiles&quot;: &quot;frontend\\.gitignore;.idea\\.gitignore;frontend\\vite.config.ts;frontend\\tsconfig.app.json;frontend\\tsconfig.json;frontend\\package-lock.json;frontend\\package.json;docker-compose.yml;nginx\\Dockerfile;frontend\\src\\pages\\login.tsx&quot;,
     &quot;git-widget-placeholder&quot;: &quot;backendDev&quot;,
     &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,

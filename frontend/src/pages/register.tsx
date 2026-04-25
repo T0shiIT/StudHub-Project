@@ -1,10 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
 
 export default function Register() {
   const navigate = useNavigate()
-  const { refresh } = useAuth()
   const [formData, setFormData] = useState({
     email: '',
     login: '',
@@ -60,8 +58,7 @@ export default function Register() {
       }
 
       localStorage.setItem('registeredEmail', formData.email)
-      // Обновляем глобальный AuthContext, чтобы /profile увидел активную сессию
-      await refresh()
+      // Сессия будет создана только после подтверждения email из письма.
       navigate('/register-success')
     } catch (err) {
       setError('Не удалось связаться с сервером')
