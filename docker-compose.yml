@@ -29,6 +29,18 @@ services:
       SPRING_DATASOURCE_USERNAME: user
       SPRING_DATASOURCE_PASSWORD: pass
       CPP_SERVICE_URL: http://cpp:8081
+      # ===== SMTP =====
+      # Поддерживаются Yandex и Mail.ru. Пресеты см. .env.example.
+      # Дефолт — Yandex (smtp.yandex.ru:465, SSL).
+      MAIL_HOST: ${MAIL_HOST:-smtp.yandex.ru}
+      MAIL_PORT: ${MAIL_PORT:-465}
+      MAIL_USERNAME: ${MAIL_USERNAME:-your_login@yandex.ru}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-your_app_password}
+      MAIL_FROM: ${MAIL_FROM:-your_login@yandex.ru}
+      MAIL_STARTTLS: ${MAIL_STARTTLS:-false}
+      MAIL_SSL: ${MAIL_SSL:-true}
+      BACKEND_URL: http://localhost:8080
+      FRONTEND_URL: http://localhost:5173
 
   frontend:
     build: ./frontend
