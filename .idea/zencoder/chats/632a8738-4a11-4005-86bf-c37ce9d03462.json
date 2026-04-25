@@ -1,0 +1,87 @@
+{
+    "checksum": "ec19346e7bb86b3993aa3c59c023ff98a3140d201f0999dc22ec66b0b5aa5456",
+    "data": {
+    "id": "632a8738-4a11-4005-86bf-c37ce9d03462",
+    "createdAt": 1775988720731,
+    "updatedAt": 1775988727674,
+    "title": "Реализуй Oauth2 авторизацию через Яндекс",
+    "messages": [
+        {
+            "id": "29131f71-98f5-489a-b801-04dd285077a6",
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Реализуй Oauth2 авторизацию через Яндекс"
+                }
+            ],
+            "context": {
+                "currentFile": {
+                    "fsPath": "E:/ideaprojects/StudHub-Project/backend/pom.xml"
+                }
+            },
+            "createdAt": 1775988720854,
+            "isInternal": false,
+            "rawContent": {
+                "type": "doc",
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Реализуй Oauth2 авторизацию через Яндекс"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "autoAppliedRules": []
+        },
+        {
+            "id": "e8b51bea-3a47-44aa-b8bf-a05cdd36b313",
+            "role": "system",
+            "content": [
+                {
+                    "type": "errorText",
+                    "text": "No models available: offline mode without cached models, and settings.json contains no models. Either configure models in settings.json or ensure gateway is accessible with ZENCODER_ACCESS_TOKEN.",
+                    "actions": [
+                        {
+                            "type": "externalAction",
+                            "title": "Regenerate",
+                            "action": "regenerateLastAnswer"
+                        }
+                    ]
+                }
+            ],
+            "createdAt": 1775988727674,
+            "isInternal": false
+        }
+    ],
+    "isAgent": true,
+    "isCustomAgent": false,
+    "isUnitTestsAgent": false,
+    "isE2EAgent": false,
+    "isWebDevAgent": false,
+    "isQnaAgent": false,
+    "model": "sonnet-4-6-think",
+    "workflowContext": {
+        "workflowType": "spec-and-build",
+        "status": "parsed",
+        "planPath": "E:\\ideaprojects\\StudHub-Project\\.zencoder\\chats\\632a8738-4a11-4005-86bf-c37ce9d03462\\plan.md",
+        "steps": [
+            {
+                "title": "Step: Technical Specification",
+                "completed": false,
+                "raw": "### [ ] Step: Technical Specification"
+            },
+            {
+                "title": "Step: Implementation",
+                "completed": false,
+                "raw": "### [ ] Step: Implementation"
+            }
+        ]
+    },
+    "lastUserMessageAt": 1775988720854
+}
+}
