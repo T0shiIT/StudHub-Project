@@ -4,12 +4,13 @@ interface AuthContextType {
   user: any;
   loading: boolean;
   isAuthenticated: boolean;
+  refresh: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   const checkAuth = async () => {
@@ -19,8 +20,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       if (response.ok) {
         const data = await response.json();
-        setUser(data);
-        localStorage.setItem('isAuthenticated', 'true');
+        if (data && !data.error) {
+          setUser(data);
+          localStorage.setItem('isAuthenticated', 'true');
+        } else {
+          setUser(null);
+          localStorage.removeItem('isAuthenticated');
+        }
       } else {
         setUser(null);
         localStorage.removeItem('isAuthenticated');
@@ -37,7 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, refresh: checkAuth }}>
       {children}
     </AuthContext.Provider>
   );

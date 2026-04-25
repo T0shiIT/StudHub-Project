@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 export default function Register() {
   const navigate = useNavigate()
+  const { refresh } = useAuth()
   const [formData, setFormData] = useState({
     email: '',
+    login: '',
     password: '',
     confirmPassword: '',
     firstName: '',
@@ -21,7 +24,7 @@ export default function Register() {
     setError('')
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
@@ -35,9 +38,34 @@ export default function Register() {
       return
     }
 
-    // Временно просто сохраняем email и переходим
-    localStorage.setItem('registeredEmail', formData.email)
-    navigate('/register-success')
+    try {
+      const response = await fetch('http://localhost:8080/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          login: formData.login,
+          group: formData.group
+        })
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        setError(data.error || 'Ошибка при регистрации')
+        return
+      }
+
+      localStorage.setItem('registeredEmail', formData.email)
+      // Обновляем глобальный AuthContext, чтобы /profile увидел активную сессию
+      await refresh()
+      navigate('/register-success')
+    } catch (err) {
+      setError('Не удалось связаться с сервером')
+    }
   }
 
   return (
@@ -76,6 +104,16 @@ export default function Register() {
           name="email"
           placeholder="Email"
           value={formData.email}
+          onChange={handleChange}
+          required
+          className="form-input"
+        />
+
+        <input
+          type="text"
+          name="login"
+          placeholder="Логин"
+          value={formData.login}
           onChange={handleChange}
           required
           className="form-input"

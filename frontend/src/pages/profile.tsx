@@ -24,6 +24,14 @@ export default function Profile() {
     );
   }
 
+  const isYandex = Boolean(user.default_avatar_id);
+  const fullName = user.real_name
+    || [user.firstName, user.lastName].filter(Boolean).join(' ')
+    || 'Имя не указано';
+  const email = user.default_email || user.email || user.login;
+  const statusText = isYandex ? 'Авторизован через Yandex' : 'Авторизован';
+  const statusColor = isYandex ? '#10b981' : '#3b82f6';
+
   return (
     <div>
       <h2>👤 Профиль пользователя</h2>
@@ -37,7 +45,7 @@ export default function Profile() {
         alignItems: 'center',
         gap: '20px'
       }}>
-        {user.default_avatar_id && (
+        {isYandex && (
           <img
             src={`https://avatars.yandex.net/get-yapic/${user.default_avatar_id}/islands-200`}
             alt="Yandex Avatar"
@@ -46,10 +54,17 @@ export default function Profile() {
         )}
 
         <div>
-          <p style={{ margin: '4px 0' }}><strong>Имя:</strong> {user.real_name ||'Имя не указано'}</p>
-          <p style={{ margin: '4px 0' }}><strong>Логин:</strong> {user.login}</p>
-          <p style={{ margin: '4px 0' }}><strong>Email:</strong> {user.default_email}</p>
-          <p style={{ margin: '4px 0', color: '#10b981' }}><strong>Статус:</strong> Авторизован через Yandex</p>
+          <p style={{ margin: '4px 0' }}><strong>Имя:</strong> {fullName}</p>
+          {user.login && (
+            <p style={{ margin: '4px 0' }}><strong>Логин:</strong> {user.login}</p>
+          )}
+          <p style={{ margin: '4px 0' }}><strong>Email:</strong> {email}</p>
+          {user.group && (
+            <p style={{ margin: '4px 0' }}><strong>Группа:</strong> {user.group}</p>
+          )}
+          <p style={{ margin: '4px 0', color: statusColor }}>
+            <strong>Статус:</strong> {statusText}
+          </p>
         </div>
       </div>
     </div>
