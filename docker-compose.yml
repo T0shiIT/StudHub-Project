@@ -10,16 +10,25 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
 
+  cpp:
+    build: ./database
+    ports:
+      - "8081:8081"
+    depends_on:
+      - db
+
   backend:
     build: ./backend
     ports:
       - "8080:8080"
     depends_on:
       - db
+      - cpp
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/studhub
       SPRING_DATASOURCE_USERNAME: user
       SPRING_DATASOURCE_PASSWORD: pass
+      CPP_SERVICE_URL: http://cpp:8081
 
   frontend:
     build: ./frontend

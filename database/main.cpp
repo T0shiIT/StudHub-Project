@@ -13,6 +13,7 @@ int main() {
     Вся реализация
     */
     handlers::register_new_user_handler(app);
+    handlers::register_oauth_user_handler(app);
 
 
     app.port(8081).multithreaded().run();
