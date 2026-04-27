@@ -1,0 +1,13 @@
+# Секреты окружения — не коммитим!
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+*.iml
+
+# Build output
+backend/target/
+frontend/dist/
+frontend/node_modules/

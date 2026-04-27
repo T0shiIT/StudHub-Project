@@ -7,20 +7,23 @@ export default function RegisterSuccess() {
     <div className="success-container">
       <div className="success-card">
         <div className="success-icon"></div>
-        <h1>Регистрация успешна!</h1>
+        <h1>Подтвердите email</h1>
         <p className="success-text">
-          Аккаунт для <strong>{email}</strong> успешно создан
+          Мы отправили письмо на <strong>{email}</strong>.
         </p>
         <div className="success-info">
-          <p>Теперь вы можете:</p>
+          <p>Чтобы завершить регистрацию:</p>
           <ul>
-            <li>Просматривать расписание занятий</li>
-            <li>Отслеживать свои оценки</li>
-            <li>Получать объявления от преподавателей</li>
+            <li>Откройте письмо от StudHub</li>
+            <li>Нажмите кнопку <b>«Подтвердить email»</b></li>
+            <li>Вы автоматически попадёте на главную страницу</li>
           </ul>
+          <p style={{ marginTop: '12px', color: '#64748b', fontSize: '13px' }}>
+            Если письма нет — проверьте папку «Спам».
+          </p>
         </div>
-        <Link to="/login" className="btn btn-primary" style={{ marginTop: '24px' }}>
-          Войти в аккаунт
+        <Link to="/login" className="btn btn-outline" style={{ marginTop: '24px' }}>
+          Вернуться ко входу
         </Link>
       </div>
     </div>
