@@ -25,13 +25,8 @@ namespace handlers {
         CROW_ROUTE(app, "/api/cpp/register-user").methods(crow::HTTPMethod::POST)
         ([](const crow::request& req) {
             try {
-<<<<<<< HEAD
                 std::cout << "[DEBUG] RECEIVED BODY: " << req.body << std::endl;
                 auto data = json::parse(req.body); //парсим полученные данные
-=======
-                std::cout << "[DEBUG] /api/cpp/register-user body: " << req.body << std::endl;
-                auto data = json::parse(req.body);
->>>>>>> origin/backendDev
 
                 std::string email        = data.value("email", "");
                 std::string login        = data.value("login", "");
