@@ -15,7 +15,7 @@ namespace handlers {
     CROW_ROUTE(app, "/api/cpp/sync-user").methods(crow::HTTPMethod::POST) 
     ([](const crow::request& req) {
             try {
-                std::cout << "[]DEBUG] RECEIVED BODY: " << req.body << std::endl;
+                std::cout << "[DEBUG] RECEIVED BODY: " << req.body << std::endl;
                 auto data = json::parse(req.body); //парсим полученные данные
 
                 std::string yandexID = data.value("id", "");
@@ -31,7 +31,7 @@ namespace handlers {
                     if (C.is_open()) {
                         pqxx::work W(C);
 
-                        std::string sql = "INSERT INTO users (email, full_name) VALUES (" +
+                        std::string sql =   "INSERT INTO users (email, full_name) VALUES (" +
                                           W.quote(email) + ", " + 
                                           W.quote(fullName) + ") " +
                                           "ON CONFLICT (email) DO NOTHING;";

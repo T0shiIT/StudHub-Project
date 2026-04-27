@@ -9,6 +9,7 @@ services:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
 
   backend:
     build: ./backend
@@ -36,6 +37,12 @@ services:
       - backend
     volumes:
       - ./frontend/dist:/usr/share/nginx/html
+  cpp:
+    build: ./database
+    depends_on:
+      - db
+    environment: 
+      DATABASE_URL: "host=db port=5432 dbname=studhub user=user password=pass"
 
 volumes:
   db_data:
