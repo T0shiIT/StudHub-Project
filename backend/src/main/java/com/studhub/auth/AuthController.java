@@ -1,5 +1,8 @@
 package com.studhub.auth;
 
+import com.studhub.security.UserDetailsImpl;
+import com.studhub.user.User;
+import com.studhub.user.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -43,6 +46,7 @@ public class AuthController {
     private final CppUserClient cppUserClient;
     private final MailService mailService;
     private final EmailVerificationTokenRepository tokenRepository;
+    private final UserRepository userRepository;
     private final long verificationTtlHours;
     private final String frontendUrl;
 
@@ -51,6 +55,7 @@ public class AuthController {
                           CppUserClient cppUserClient,
                           MailService mailService,
                           EmailVerificationTokenRepository tokenRepository,
+                          UserRepository userRepository,
                           @Value("${app.mail.verification-ttl-hours:24}") long verificationTtlHours,
                           @Value("${frontend.url:http://localhost:5173}") String frontendUrl) {
         this.passwordEncoder = passwordEncoder;
@@ -58,6 +63,7 @@ public class AuthController {
         this.cppUserClient = cppUserClient;
         this.mailService = mailService;
         this.tokenRepository = tokenRepository;
+        this.userRepository = userRepository;
         this.verificationTtlHours = verificationTtlHours;
         this.frontendUrl = frontendUrl;
     }
@@ -140,11 +146,17 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(url)).build();
     }
 
-    private void authenticate(String principal, HttpServletRequest request, HttpServletResponse response) {
+    /**
+     * Создаёт сессию для пользователя с реальной ролью из базы данных.
+     */
+    private void authenticate(String email, HttpServletRequest request, HttpServletResponse response) {
+        User user = userRepository.findByEmail(email).orElseThrow(() ->
+                new IllegalStateException("Пользователь с email " + email + " не найден после подтверждения"));
+
         Authentication auth = new UsernamePasswordAuthenticationToken(
-                principal,
+                new UserDetailsImpl(user),
                 null,
-                List.of(new SimpleGrantedAuthority("ROLE_USER"))
+                List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()))
         );
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(auth);
