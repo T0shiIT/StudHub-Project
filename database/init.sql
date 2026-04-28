@@ -1,10 +1,14 @@
 -- USERS
-CREATE TABLE users (
-    user_id SERIAL PRIMARY KEY,
+CREATE TABLE app_users (
+    id SERIAL PRIMARY KEY,
+    -- user_id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
-    full_name VARCHAR(255) NOT NULL,
+    first_name VARCHAR(255),
+    last_name VARCHAR(255),
+    group_name VARCHAR(255),
     is_blocked BOOLEAN DEFAULT FALSE,
---  password_hash TEXT NOT NULL,
+    role VARCHAR(255) DEFAULT 'GUEST',
+    password_hash TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

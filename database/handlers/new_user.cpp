@@ -56,10 +56,10 @@ namespace handlers {
 
                 pqxx::result inserted = W.exec_params(
                     "INSERT INTO app_users "
-                    "(email, login, password_hash, first_name, last_name, group_name, created_at) "
-                    "VALUES ($1, $2, $3, $4, $5, $6, NOW()) "
+                    "(email, login, password_hash, first_name, last_name, group_name, role, created_at) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) "
                     "RETURNING id",
-                    email, login, passwordHash, firstName, lastName, groupName);
+                    email, login, passwordHash, firstName, lastName, groupName, "GUEST"); //добавил роль 
 
                 long id = inserted[0][0].as<long>();
                 W.commit();
@@ -122,16 +122,17 @@ namespace handlers {
                 // иначе вставляем нового.
                 pqxx::result row = W.exec_params(
                     "INSERT INTO app_users "
-                    "(email, login, password_hash, first_name, last_name, group_name, created_at) "
-                    "VALUES ($1, $2, $3, $4, $5, $6, NOW()) "
+                    "(email, login, password_hash, first_name, last_name, group_name, role, created_at) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) "
                     "ON CONFLICT (email) DO UPDATE SET "
                     "  login = EXCLUDED.login, "
                     "  first_name = EXCLUDED.first_name, "
                     "  last_name = EXCLUDED.last_name "
-                    "RETURNING id",
-                    email, login, passwordHash, firstName, lastName, groupName);
+                    "RETURNING id, role",
+                    email, login, passwordHash, firstName, lastName, groupName, "GUEST");
 
                 long id = row[0][0].as<long>();
+                std::string currentRole = row[0][1].as<std::string>(); //добавил
                 W.commit();
 
                 std::cout << "[DB] Synced OAuth user " << email
@@ -140,6 +141,7 @@ namespace handlers {
                 json res;
                 res["status"]     = "ok";
                 res["id"]         = id;
+                res["role"]       = currentRole;  
                 res["email"]      = email;
                 res["login"]      = login;
                 res["first_name"] = firstName;
