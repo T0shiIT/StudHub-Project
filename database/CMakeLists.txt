@@ -33,6 +33,23 @@ add_executable(core
     handlers/new_user.cpp
     handlers/get_data.cpp
 )
+find_package(xlnt CONFIG REQUIRED)
+
+# add executable
+add_executable(core
+    main.cpp
+    user/users_permissions.h
+    handlers/new_user.cpp
+    handlers/get_data.cpp
+    handlers/upload_schedule.cpp
+)
+
+target_link_libraries(core
+    ${PQXX_LIBRARIES}
+    ${LIBPQ_LIBRARIES}
+    nlohmann_json::nlohmann_json
+    xlnt::xlnt
+)
 
 target_link_libraries(core
     ${PQXX_LIBRARIES}
