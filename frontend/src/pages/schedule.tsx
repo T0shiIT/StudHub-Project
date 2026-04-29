@@ -1,50 +1,61 @@
-import { useRef, useState} from 'react';
+import { useRef, useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 export default function Schedule() {
-  // Ссылка на импут
+  // Ссылка на скрытый input
   const fileInputRef = useRef<HTMLInputElement>(null);
-  //Состояние для хранения файлов
-  const [selectedFile, setSelectedFile] = useState<File | null> (null);
+  // Состояние для хранения выбранного файла
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  //Обработчик клика - проводник
+  // Получаем данные пользователя из контекста
+  const { user, isAuthenticated } = useAuth();
+  
+  // Проверяем, является ли пользователь администратором.
+  // Предполагаем, что в объекте user есть поле role.
+  // При необходимости замените 'admin' на нужное значение, например 'ROLE_ADMIN'.
+  const isAdmin = isAuthenticated && user?.role === 'admin';
+
+  // Обработчик клика по кнопке – открывает проводник
   const handleButtonClick = () => {
     fileInputRef.current?.click();
   };
 
-  //Обработчик изменения значения imnput
+  // Обработчик выбора файла
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files && files.length > 0) {
-      setSelectedFile(files[0]); // сохранияем первый выбранный файл
-      // возможно здесь загрузка на сервер
+      setSelectedFile(files[0]);
+      // Здесь может быть логика загрузки файла на сервер
     }
   };
 
-    return (
+  return (
     <div>
       <h2>Расписание занятий</h2>
       <p style={{ color: '#64748b', marginTop: '16px' }}>
         Здесь будет таблица с расписанием (задача Анны)
       </p>
 
-      {/* Скрытый input для выбора файла */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        style={{display: 'none' }}    //Визуально скрыт
-        onChange={handleFileChange}
-        //accept=".xlsx"
-      />
-      {/* Кнопка, которую видит пользователь */}
-      <button onClick={handleButtonClick} style={{ marginTop: '20px' }}>
-        Выбрать файл
-      </button>
+      {/* Блок загрузки файла – отображается только для администратора */}
+      {isAdmin && (
+        <>
+          <input
+            type="file"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+            // accept=".xlsx"
+          />
+          <button onClick={handleButtonClick} style={{ marginTop: '20px' }}>
+            Выбрать файл
+          </button>
 
-      {/* Отображение имени выбранного файла */}
-      {selectedFile && (
-        <p style={{ marginTop: '12px', color: '#16a34a'}}>
-          Выбран файл: {selectedFile.name}
-        </p>
+          {selectedFile && (
+            <p style={{ marginTop: '12px', color: '#16a34a' }}>
+              Выбран файл: {selectedFile.name}
+            </p>
+          )}
+        </>
       )}
     </div>
   );
