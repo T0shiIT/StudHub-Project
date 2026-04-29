@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import org.springframework.http.ResponseEntity; // ТЕСТ РОУТА НА ПОЛУЧЕНИЕ ДАННЫХ
 import org.springframework.web.client.RestTemplate; //ТЕСТ РОУТА НА ПОЛУЧЕНИЕ ДАННЫХ
+import org.springframework.web.bind.annotation.RequestHeader; //ТЕСТ РОУТА НА ПОЛУЧЕНИЕ ДАННЫЙ №2
 
 import java.util.HashMap;
 import java.util.Map;
@@ -55,18 +56,26 @@ public class TestController {
     }
 
     @GetMapping("/api/cpp-profile")
-    public ResponseEntity<String> getCppProfile(Authentication authentication) {
-        int userIdForCpp = 1; 
+    public ResponseEntity<String> getCppProfile(@RequestHeader(value = "X-User-Id", required = false) String userId, 
+    Authentication authentication) {
 
-        String cppUrl = "http://cpp:8081/api/cpp/profile/" + userIdForCpp;
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(401).body("User not authenticated");
+        }
+
+        String cppUrl = "http://cpp:8081/api/cpp/profile/" + userId;
 
         try {
-            // Java просто забирает строку у Crow и отдает её фронту
-            String jsonFromCpp = restTemplate.getForObject(cppUrl, String.class);
-            
-            return ResponseEntity.ok()
-                    .header("Content-Type", "application/json")
-                    .body(jsonFromCpp);
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.set("X-User-Id", userId);
+            org.springframework.http.HttpEntity<String> entity = new org.springframework.http.HttpEntity<>(headers);
+           
+           return restTemplate.exchange(
+            cppUrl, 
+            org.springframework.http.HttpMethod.GET, 
+            entity, 
+            String.class
+        );
         } catch (Exception e) {
             // Если Crow упадет или база в С++ отвалится, увидим здесь
             return ResponseEntity.status(500).body("C++ Backend Error: " + e.getMessage());

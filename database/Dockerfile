@@ -13,6 +13,27 @@ RUN git clone --depth 1 https://github.com/CrowCpp/Crow.git /tmp/crow && \
     cp -rv /tmp/crow/include/* /usr/local/include/ && \
     rm -rf /tmp/crow
 
+
+WORKDIR /app
+COPY . .
+RUN mkdir build && cd build && \
+    cmake .. -DCMAKE_CXX_STANDARD=20 && \
+    make -j$(nproc)
+
+FROM ubuntu:22.04
+RUN apt-get update && apt-get install -y \
+    libpqxx-dev\
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /app/build/core .
+
+CMD ["./core"]
+
+
+
 # WORKDIR /opt
 # RUN git clone --depth 1 https://github.com/microsoft/vcpkg.git && \
 #     ./vcpkg/bootstrap-vcpkg.sh
@@ -33,21 +54,3 @@ RUN git clone --depth 1 https://github.com/CrowCpp/Crow.git /tmp/crow && \
 
 # WORKDIR /app/build
 # CMD ["./core"]
-
-WORKDIR /app
-COPY . .
-RUN mkdir build && cd build && \
-    cmake .. -DCMAKE_CXX_STANDARD=20 && \
-    make -j$(nproc)
-
-FROM ubuntu:22.04
-RUN apt-get update && apt-get install -y \
-    libpqxx-dev\
-    libpq5 \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-COPY --from=builder /app/build/core .
-
-CMD ["./core"]

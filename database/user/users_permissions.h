@@ -5,8 +5,6 @@
 #include <stdexcept>
 
 namespace user_permissions {
-
-    // Константы разрешений, чтобы не ошибаться в строках
     namespace Perm {
         const std::string COURSE_JOIN     = "course:join";
         const std::string PROFILE_VIEW    = "profile:view";
@@ -29,14 +27,12 @@ namespace user_permissions {
             return permissions.find(perm) != permissions.end();
         }
 
-        // Семантические проверки
         bool can_join_course() const    { return has_permission(Perm::COURSE_JOIN); }
         bool can_view_profile() const   { return has_permission(Perm::PROFILE_VIEW); }
         bool can_edit_profile() const   { return has_permission(Perm::PROFILE_EDIT); }
         bool can_view_user_list() const { return has_permission(Perm::USER_LIST_READ); }
     };
 
-    // Конкретные роли
     class Admin : public User {
     public:
         Admin() {
@@ -61,7 +57,6 @@ namespace user_permissions {
         }
     };
 
-    // Фабрика: по строке роли из БД создаёт нужный объект
     inline std::unique_ptr<User> create_user(const std::string& role) {
         if (role == "ADMIN")   return std::make_unique<Admin>();
         if (role == "STUDENT") return std::make_unique<Student>();

@@ -1,12 +1,13 @@
 #include <iostream>
-#include "handlers/upload_schedule.h"
-#include "user/users_permissions.h"
 #include <pqxx/pqxx>
 #include <crow.h>
 #include <string>
+
 #include "handlers/new_user.h"
 #include "handlers/get_data.h"
+#include "user/users_permissions.h"
 
+//#include "handlers/upload_schedule.h"
 std::string DB_CONN = "host=db dbname=studhub user=user password=pass";
 
 int main() {
@@ -14,7 +15,7 @@ int main() {
     handlers::register_new_user_handler(app);
     handlers::register_oauth_user_handler(app);
     handlers::get_user_profile_handler(app);
-    handlers::upload_schedule_handler(app);
+    // handlers::upload_schedule_handler(app);
 
 
     app.port(8081).multithreaded().run();
