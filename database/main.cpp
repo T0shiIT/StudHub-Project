@@ -4,6 +4,7 @@
 #include <crow.h>
 #include <string>
 #include "handlers/new_user.h"
+#include "handlers/get_data.h"
 
 std::string DB_CONN = "host=db dbname=studhub user=user password=pass";
 
@@ -14,6 +15,7 @@ int main() {
     */
     handlers::register_new_user_handler(app);
     handlers::register_oauth_user_handler(app);
+    handlers::get_user_profile_handler(app);
 
 
     app.port(8081).multithreaded().run();

@@ -1,8 +1,8 @@
 -- USERS
 CREATE TABLE app_users (
-    id SERIAL PRIMARY KEY,
-    -- user_id SERIAL PRIMARY KEY,
+    user_id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
+    login VARCHAR(255) UNIQUE NOT NULL,
     first_name VARCHAR(255),
     last_name VARCHAR(255),
     group_name VARCHAR(255),
@@ -19,10 +19,24 @@ CREATE TABLE roles (
     role_name VARCHAR(255) UNIQUE NOT NULL
 );
 
--- UserRoles
-CREATE TABLE user_roles (
-    user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
-    role_id INTEGER REFERENCES roles(role_id) ON DELETE CASCADE,
-    PRIMARY KEY (user_id, role_id)
+CREATE TABLE user_profile (
+    profile_id SERIAL PRIMARY KEY,
+    user_id INTEGER UNIQUE NOT NULL REFERENCES app_users(user_id) ON DELETE CASCADE,
+    bio TEXT,
+    avatar_url VARCHAR(255) DEFAULT 'https://photos.app.goo.gl/3rVQBMCJnd1PWWQ99', --засунуть ссылку из облачного хранилища
+    birthday DATE
 );
 
+
+CREATE TABLE study_groups (
+    group_id SERIAL PRIMARY KEY,
+    group_name VARCHAR(50) UNIQUE NOT NULL,
+    kafedra VARCHAR(100)
+);
+
+-- -- UserRoles
+-- CREATE TABLE user_roles (
+--     user_id INTEGER REFERENCES app_users(user_id) ON DELETE CASCADE,
+--     role_id INTEGER REFERENCES roles(role_id) ON DELETE CASCADE,
+--     PRIMARY KEY (user_id, role_id)
+-- );

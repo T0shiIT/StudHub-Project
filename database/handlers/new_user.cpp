@@ -58,18 +58,18 @@ namespace handlers {
                     "INSERT INTO app_users "
                     "(email, login, password_hash, first_name, last_name, group_name, role, created_at) "
                     "VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) "
-                    "RETURNING id",
+                    "RETURNING user_id",
                     email, login, passwordHash, firstName, lastName, groupName, "GUEST"); //добавил роль 
 
-                long id = inserted[0][0].as<long>();
+                long userid = inserted[0][0].as<long>();
                 W.commit();
 
                 std::cout << "[DB] Registered user " << email
-                          << " (login=" << login << ", id=" << id << ")" << std::endl;
+                          << " (login=" << login << ", id=" << userid << ")" << std::endl;
 
                 json res;
                 res["status"]     = "ok";
-                res["id"]         = id;
+                res["id"]         = userid;
                 res["email"]      = email;
                 res["login"]      = login;
                 res["first_name"] = firstName;
@@ -128,19 +128,19 @@ namespace handlers {
                     "  login = EXCLUDED.login, "
                     "  first_name = EXCLUDED.first_name, "
                     "  last_name = EXCLUDED.last_name "
-                    "RETURNING id, role",
+                    "RETURNING user_id, role",
                     email, login, passwordHash, firstName, lastName, groupName, "GUEST");
 
-                long id = row[0][0].as<long>();
+                long userid = row[0][0].as<long>();
                 std::string currentRole = row[0][1].as<std::string>(); //добавил
                 W.commit();
 
                 std::cout << "[DB] Synced OAuth user " << email
-                          << " (login=" << login << ", id=" << id << ")" << std::endl;
+                          << " (login=" << login << ", id=" << userid << ")" << std::endl;
 
                 json res;
                 res["status"]     = "ok";
-                res["id"]         = id;
+                res["id"]         = userid;
                 res["role"]       = currentRole;  
                 res["email"]      = email;
                 res["login"]      = login;

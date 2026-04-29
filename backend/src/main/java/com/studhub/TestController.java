@@ -8,6 +8,9 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.springframework.http.ResponseEntity; // ТЕСТ РОУТА НА ПОЛУЧЕНИЕ ДАННЫХ
+import org.springframework.web.client.RestTemplate; //ТЕСТ РОУТА НА ПОЛУЧЕНИЕ ДАННЫХ
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -15,6 +18,8 @@ import java.util.Map;
 public class TestController {
 
     private final UserRepository userRepository;
+    //ТЕСТ РОУТА НА ПОЛУЧЕНИЕ ДАННЫХ
+    private final RestTemplate restTemplate = new RestTemplate();
 
     public TestController(UserRepository userRepository) {
         this.userRepository = userRepository;
@@ -47,6 +52,25 @@ public class TestController {
         return userRepository.findByEmail(email)
                 .map(this::toProfile)
                 .orElse(Map.of("error", "User not found"));
+    }
+
+    @GetMapping("/api/cpp-profile")
+    public ResponseEntity<String> getCppProfile(Authentication authentication) {
+        int userIdForCpp = 1; 
+
+        String cppUrl = "http://cpp:8081/api/cpp/profile/" + userIdForCpp;
+
+        try {
+            // Java просто забирает строку у Crow и отдает её фронту
+            String jsonFromCpp = restTemplate.getForObject(cppUrl, String.class);
+            
+            return ResponseEntity.ok()
+                    .header("Content-Type", "application/json")
+                    .body(jsonFromCpp);
+        } catch (Exception e) {
+            // Если Crow упадет или база в С++ отвалится, увидим здесь
+            return ResponseEntity.status(500).body("C++ Backend Error: " + e.getMessage());
+        }
     }
 
     private Map<String, Object> toProfile(User u) {

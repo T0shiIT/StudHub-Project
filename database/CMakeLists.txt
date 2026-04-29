@@ -31,6 +31,7 @@ add_executable(core
     main.cpp
     user/users_permissions.h
     handlers/new_user.cpp
+    handlers/get_data.cpp
 )
 
 target_link_libraries(core
