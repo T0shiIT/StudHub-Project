@@ -1,9 +1,18 @@
 #pragma once
 #include <string>
-#include <vector>
 #include <set>
+#include <memory>
+#include <stdexcept>
 
 namespace user_permissions {
+
+    // Константы разрешений, чтобы не ошибаться в строках
+    namespace Perm {
+        const std::string COURSE_JOIN     = "course:join";
+        const std::string PROFILE_VIEW    = "profile:view";
+        const std::string PROFILE_EDIT    = "profile:edit";
+        const std::string USER_LIST_READ  = "user:list:read";
+    }
 
     class User {
     public:
@@ -14,60 +23,49 @@ namespace user_permissions {
         std::set<std::string> permissions;
 
         virtual ~User() = default;
-        // проверка на наличие прав
+
         bool has_permission(const std::string& perm) const {
             if (is_blocked) return false;
             return permissions.find(perm) != permissions.end();
         }
-        //Пррисоединиться к курсу
-        bool has_permission_to_add_course() const { return has_permission("course:join"); }
 
-
-
-        // ПОЛЬЗОВАТЕЛИ
-        bool can_view_user_list() const { return has_permission("user:lis:read"); }
-
-        //ВНУТРЕННЯЯ НАСТРЙОКА ПОЛЬЗОВАТЕЛЯ (КАСТОМ ЮЗЕРА)
-        bool can_edit_profile() { return has_permission("profile:view"); }
-
-
+        // Семантические проверки
+        bool can_join_course() const    { return has_permission(Perm::COURSE_JOIN); }
+        bool can_view_profile() const   { return has_permission(Perm::PROFILE_VIEW); }
+        bool can_edit_profile() const   { return has_permission(Perm::PROFILE_EDIT); }
+        bool can_view_user_list() const { return has_permission(Perm::USER_LIST_READ); }
     };
-    
+
+    // Конкретные роли
     class Admin : public User {
-    public:    
+    public:
         Admin() {
-            permissions = {
-                "course:join",
-                "profile:view",
-                "profile:edit"
-            };
+            permissions = { Perm::COURSE_JOIN, Perm::PROFILE_VIEW,
+                            Perm::PROFILE_EDIT, Perm::USER_LIST_READ };
         }
-        
     };
 
     class Guest : public User {
     public:
         Guest() {
-            permissions = {
-                "course:join",
-                "porfile:view",
-                "profile:edit"
-            };
+            permissions = { Perm::COURSE_JOIN, Perm::PROFILE_VIEW,
+                            Perm::PROFILE_EDIT };
         }
     };
 
     class Student : public User {
     public:
         Student() {
-            permissions = {
-                "course:join",
-                "profile:view",
-                "profile:edit"
-            };
+            permissions = { Perm::COURSE_JOIN, Perm::PROFILE_VIEW,
+                            Perm::PROFILE_EDIT };
         }
     };
 
-
-
-
+    // Фабрика: по строке роли из БД создаёт нужный объект
+    inline std::unique_ptr<User> create_user(const std::string& role) {
+        if (role == "ADMIN")   return std::make_unique<Admin>();
+        if (role == "STUDENT") return std::make_unique<Student>();
+        if (role == "GUEST")   return std::make_unique<Guest>();
+        throw std::invalid_argument("Unknown role: " + role);
+    }
 }
