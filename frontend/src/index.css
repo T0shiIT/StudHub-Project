@@ -370,3 +370,28 @@ body {
 .success-info li {
   margin: 8px 0;
 }
+
+.schedule-upload-btn {
+  margin-top: 20px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(22, 163, 74, 0.25);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+
+.schedule-upload-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(22, 163, 74, 0.32);
+  filter: brightness(1.03);
+}
+
+.schedule-upload-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 6px 14px rgba(22, 163, 74, 0.22);
+}

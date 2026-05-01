@@ -36,6 +36,7 @@ add_executable(core
     user/users_permissions.h
     handlers/new_user.cpp
     handlers/get_data.cpp
+    handlers/schedule_json.cpp
 )
 
 target_link_libraries(core

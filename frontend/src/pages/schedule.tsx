@@ -6,10 +6,7 @@ export default function Schedule() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<string>('');
-  const { user, isAuthenticated } = useAuth();
-
-  // Check for admin role (adjust role name as stored in DB)
-  const isAdmin = isAuthenticated && user?.role === 'ADMIN';
+  const { isAuthenticated } = useAuth();
 
   const handleButtonClick = () => {
     fileInputRef.current?.click();
@@ -27,21 +24,21 @@ export default function Schedule() {
     formData.append('file', file);
 
     try {
-      setUploadStatus('Uploading...');
+      setUploadStatus('Загрузка...');
       const response = await axios.post(
-        'http://localhost:8081/api/cpp/upload-schedule',
+        'http://localhost:8080/api/schedule/upload',
         formData,
         {
           headers: {
             'Content-Type': 'multipart/form-data',
-            'X-User-Id': user?.id?.toString() || ''
-          }
+          },
+          withCredentials: true
         }
       );
-      setUploadStatus(`Success: ${response.data.message}`);
+      setUploadStatus(`Успешно: ${response.data.message}`);
     } catch (error: any) {
-      const msg = error.response?.data || error.message;
-      setUploadStatus(`Error: ${msg}`);
+      const msg = error.response?.data?.error || error.response?.data?.detail || error.message;
+      setUploadStatus(`Ошибка: ${msg}`);
     }
   };
 
@@ -52,17 +49,17 @@ export default function Schedule() {
         Здесь будет таблица с расписанием
       </p>
 
-      {isAdmin && (
+      {isAuthenticated && (
         <>
           <input
             type="file"
             ref={fileInputRef}
             style={{ display: 'none' }}
             onChange={handleFileChange}
-            accept=".xlsx"
+            accept=".xlsx,.xlsm,.xlsb,.xls"
           />
-          <button onClick={handleButtonClick} style={{ marginTop: '20px' }}>
-            Выбрать файл
+          <button onClick={handleButtonClick} className="schedule-upload-btn">
+            Добавить расписание
           </button>
 
           {selectedFile && (

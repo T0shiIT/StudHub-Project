@@ -41,7 +41,29 @@ public class CppUserClient {
         return call("/api/cpp/sync-oauth-user", payload);
     }
 
-    private Result call(String uri, Map<String, String> payload) {
+    public Result uploadSchedule(Map<String, ?> payload) {
+        return call("/api/cpp/schedule/upload-json", payload);
+    }
+
+    public Result latestSchedule() {
+        try {
+            ResponseEntity<String> response = restClient.get()
+                    .uri("/api/cpp/schedule/latest")
+                    .retrieve()
+                    .onStatus(status -> true, (req, res) -> { })
+                    .toEntity(String.class);
+
+            HttpStatus status = HttpStatus.valueOf(response.getStatusCode().value());
+            Map<?, ?> body = parseBody(response.getBody());
+            return new Result(status, body);
+        } catch (Exception e) {
+            log.error("Unexpected error when loading latest schedule", e);
+            return new Result(HttpStatus.BAD_GATEWAY,
+                    Map.of("error", "C++ сервис недоступен: " + e.getMessage()));
+        }
+    }
+
+    private Result call(String uri, Map<String, ?> payload) {
         try {
             // Берём ответ как сырую строку, чтобы избежать падения при пустом теле
             // или неверном Content-Type со стороны C++ сервиса.

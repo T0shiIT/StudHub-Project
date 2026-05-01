@@ -5,6 +5,7 @@
 
 #include "handlers/new_user.h"
 #include "handlers/get_data.h"
+#include "handlers/schedule_json.h"
 #include "user/users_permissions.h"
 
 //#include "handlers/upload_schedule.h"
@@ -15,6 +16,7 @@ int main() {
     handlers::register_new_user_handler(app);
     handlers::register_oauth_user_handler(app);
     handlers::get_user_profile_handler(app);
+    handlers::register_schedule_json_handlers(app);
     // handlers::upload_schedule_handler(app);
 
 
