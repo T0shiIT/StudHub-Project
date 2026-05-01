@@ -1,25 +1,27 @@
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 export default function Header() {
   const navigate = useNavigate()
-  const isAuth = localStorage.getItem('isAuth') === 'true'
+  const { user, isAuthenticated } = useAuth()
 
   const handleLogin = () => {
     navigate('/login')
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('isAuth')
-    window.location.reload()
+    localStorage.removeItem('isAuthenticated')
+    // Завершаем серверную сессию, чтобы OAuth/Session статус сбросился корректно.
+    window.location.href = 'http://localhost:8080/logout'
   }
 
   return (
     <header className="header">
       <h1>StudHub</h1>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        {isAuth ? (
+        {isAuthenticated ? (
           <>
-            <span>Андрей (TeamLead)</span>
+            <span>{user?.login || user?.default_email || 'Пользователь'}</span>
             <button 
               className="btn" 
               onClick={handleLogout}
