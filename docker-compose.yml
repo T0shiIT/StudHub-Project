@@ -13,6 +13,8 @@ services:
     build: ./database
     depends_on:
       - db
+    volumes:
+      - ./uploads/schedules:/app/uploads/schedules
 
   backend:
     build: ./backend
@@ -21,6 +23,7 @@ services:
     depends_on:
       - db
       - cpp
+      - parser
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/studhub
       SPRING_DATASOURCE_USERNAME: user
@@ -28,6 +31,7 @@ services:
       SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       CPP_SERVICE_URL: http://cpp:8081
+      PARSER_SERVICE_URL: http://parser:8000
       # ===== SMTP =====
       # Поддерживаются Yandex и Mail.ru. Пресеты см. .env.example.
       # Дефолт — Yandex (smtp.yandex.ru:465, SSL).
@@ -47,6 +51,11 @@ services:
       - "5173"
     depends_on:
       - backend
+
+  parser:
+    build: ./parser
+    expose:
+      - "8000"
 
   nginx:
     build: ./nginx
