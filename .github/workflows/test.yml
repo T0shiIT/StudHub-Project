@@ -1,0 +1,20 @@
+name: CI TEST
+
+on:
+  push:
+    branches: ["development"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Клонируем репозиторий
+        uses: actions/checout@v4
+
+      - name: Выдаем права на запуск
+        run: chmod +x test.sh
+
+      - name:
+        run: ./test.sh
