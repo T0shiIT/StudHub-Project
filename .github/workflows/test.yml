@@ -10,11 +10,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Клонируем репозиторий
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Выдаем права на запуск
-        run: chmod +x test.sh
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-      - name:
-        run: ./test.sh
+      - name: Start full stack
+        run: docker compose up -d 
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Wait for services
+        run: sleep 15      
+
+      - name: Run .sh diagnostic
+        run: chmod +x test.sh && ./scripts/test.sh
+
+      - name: Run python tests
+        run:  pytest
+      
+      - name: Stop services
+        run: docker compose down
+      
