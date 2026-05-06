@@ -28,7 +28,7 @@ jobs:
         run: sleep 15      
 
       - name: Run .sh diagnostic
-        run: chmod +x test.sh && ./scripts/test.sh
+        run: chmod +x ./scripts/test.sh && ./scripts/test.sh
 
       - name: Run python tests
         run:  pytest
