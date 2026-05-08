@@ -26,7 +26,7 @@ const getGradeColor = (grade: number | null) => {
 
 export default function Grades() {
   const { user, isAuthenticated } = useAuth();
-  const role: UserRole = (user?.role as UserRole) || 'student';
+  const role: UserRole = (user?.role as UserRole) || 'admin';
 
   const [journal, setJournal] = useState<JournalData | null>(null);
   const [loading, setLoading] = useState(true);
