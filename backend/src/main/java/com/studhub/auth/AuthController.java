@@ -1,5 +1,7 @@
 package com.studhub.auth;
 
+import com.studhub.user.User;
+import com.studhub.user.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -43,6 +45,7 @@ public class AuthController {
     private final CppUserClient cppUserClient;
     private final MailService mailService;
     private final EmailVerificationTokenRepository tokenRepository;
+    private final UserRepository userRepository;
     private final long verificationTtlHours;
     private final String frontendUrl;
 
@@ -51,6 +54,7 @@ public class AuthController {
                           CppUserClient cppUserClient,
                           MailService mailService,
                           EmailVerificationTokenRepository tokenRepository,
+                          UserRepository userRepository,
                           @Value("${app.mail.verification-ttl-hours:24}") long verificationTtlHours,
                           @Value("${frontend.url:http://localhost:5173}") String frontendUrl) {
         this.passwordEncoder = passwordEncoder;
@@ -58,8 +62,48 @@ public class AuthController {
         this.cppUserClient = cppUserClient;
         this.mailService = mailService;
         this.tokenRepository = tokenRepository;
+        this.userRepository = userRepository;
         this.verificationTtlHours = verificationTtlHours;
         this.frontendUrl = frontendUrl;
+    }
+
+    /**
+     * Вход по email/логину и паролю. Поле {@code email} принимает либо email,
+     * либо login — это удобнее для пользователя (форма на фронте одна и та же).
+     * При успехе создаётся HTTP-сессия — фронту достаточно слать запросы с
+     * {@code credentials: 'include'}, кука {@code JSESSIONID} попадёт автоматически.
+     */
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestBody Map<String, String> body,
+                                   HttpServletRequest request,
+                                   HttpServletResponse response) {
+        String identifier = body.getOrDefault("email", "").trim().toLowerCase();
+        String password = body.getOrDefault("password", "");
+
+        if (identifier.isEmpty() || password.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "Введите email/логин и пароль"));
+        }
+
+        // Сначала пытаемся как email, потом — как login (форма принимает оба).
+        User user = userRepository.findByEmail(identifier)
+                .or(() -> userRepository.findByLogin(body.getOrDefault("email", "").trim()))
+                .orElse(null);
+
+        if (user == null || !passwordEncoder.matches(password, user.getPasswordHash())) {
+            // Намеренно не уточняем, что именно неверно — чтобы не давать подсказки злоумышленнику.
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Неверный email/логин или пароль"));
+        }
+
+        authenticate(user.getEmail(), request, response);
+
+        Map<String, Object> profile = new LinkedHashMap<>();
+        profile.put("email", user.getEmail());
+        profile.put("login", user.getLogin());
+        profile.put("firstName", user.getFirstName());
+        profile.put("lastName", user.getLastName());
+        return ResponseEntity.ok(profile);
     }
 
     @PostMapping("/register")

@@ -2,14 +2,17 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import yandexIcon from '../assets/yandex-icon.png'
 import vkIcon from '../assets/vk-icon.png'
+import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
   const navigate = useNavigate()
+  const { refresh } = useAuth()
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   })
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -19,7 +22,9 @@ export default function Login() {
     setError('')
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+
+  //Заглушка изменена на обработку логина
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
@@ -28,10 +33,34 @@ export default function Login() {
       return
     }
 
-    // Временно просто пускаем в систему
-    localStorage.setItem('isAuthenticated', 'true')
-    localStorage.setItem('userEmail', formData.email)
-    navigate('/schedule')
+    setSubmitting(true)
+    try {
+      const res = await fetch('http://localhost:8080/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // ОБЯЗАТЕЛЬНО — иначе сессионная кука не установится
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setError(err.error || 'Ошибка входа')
+        return
+      }
+
+      // Подтягиваем профиль через GET /api/user, чтобы AuthContext знал о новом юзере.
+      await refresh()
+      localStorage.setItem('isAuthenticated', 'true')
+      localStorage.setItem('userEmail', formData.email)
+      navigate('/schedule')
+    } catch {
+      setError('Сервер недоступен')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleYandexLogin = () => {
@@ -78,8 +107,8 @@ export default function Login() {
           />
         </div>
 
-        <button type="submit" className="btn btn-primary btn-login">
-          Войти
+        <button type="submit" className="btn btn-primary btn-login" disabled={submitting}>
+          {submitting ? 'Входим…' : 'Войти'}
         </button>
       </form>
 
