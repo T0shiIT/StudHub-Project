@@ -122,6 +122,7 @@ public class TestController {
 
     private Map<String, Object> toProfile(User u) {
         Map<String, Object> result = new HashMap<>();
+        result.put("id", u.getId());
         result.put("email", u.getEmail());
         result.put("login", u.getLogin());
         result.put("firstName", u.getFirstName());

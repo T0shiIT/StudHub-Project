@@ -22,7 +22,8 @@ jobs:
         run: docker compose up -d 
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: python -m pip install --upgrade pip
+             pip install requests pytest
 
       - name: Wait for services
         run: sleep 15      
@@ -31,8 +32,15 @@ jobs:
         run: chmod +x ./scripts/test.sh && ./scripts/test.sh
 
       - name: Run python tests
-        run:  pytest
+        run: pytest -s tests/test_auth.py
+
+      - name: Run python tests TEST API
+        run:  pytest -s tests/test_project.py
       
-      - name: Stop services
+      - name: Run python tests AUTHORIZATION TEST
+        run: pytest -s tests/tes_auth.py
+      
+      - name: Stop services 
+        if: always()
         run: docker compose down
       

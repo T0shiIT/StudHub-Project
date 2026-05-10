@@ -102,6 +102,7 @@ public class AuthController {
         authenticate(user.getEmail(), request, response);
 
         Map<String, Object> profile = new LinkedHashMap<>();
+        profile.put("id", user.getId());
         profile.put("email", user.getEmail());
         profile.put("login", user.getLogin());
         profile.put("firstName", user.getFirstName());
@@ -134,7 +135,19 @@ public class AuthController {
             return ResponseEntity.status(result.status()).body(result.body());
         }
 
+         Long userId = null;
+        try {
+            // result.body() — это Map с данными пользователя из C++
+            if (result.body() instanceof Map) {
+                Map<String, Object> cppResponse = (Map<String, Object>) result.body();
+                userId = ((Number) cppResponse.get("id")).longValue();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to extract user id from C++ response", e);
+        }
+
         Map<String, Object> responseBody = new LinkedHashMap<>();
+        responseBody.put("id", userId);
         responseBody.put("email", email);
         responseBody.put("login", login);
 

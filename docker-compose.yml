@@ -65,8 +65,11 @@ services:
       - "80:80"
     depends_on:
       - backend
+      - cpp
     volumes:
+      # - ./frontend/dist:/usr/share/nginx/html
       - ./frontend/dist:/usr/share/nginx/html
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
 
 volumes:
   db_data:
