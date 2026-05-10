@@ -32,25 +32,3 @@ COPY --from=builder /app/build/core .
 
 CMD ["./core"]
 
-
-
-# WORKDIR /opt
-# RUN git clone --depth 1 https://github.com/microsoft/vcpkg.git && \
-#     ./vcpkg/bootstrap-vcpkg.sh
-# ENV PATH="/opt/vcpkg:$PATH"
-
-# WORKDIR /app
-
-# #В vcpkg либы которые требуют сложной компиляции
-# RUN vcpkg install \
-#     --triplet x64-linux \
-#     nlohmann-json
-
-# COPY . /app
-
-# RUN mkdir -p build && cd build && \
-#     cmake .. -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_CXX_STANDARD=20 && \
-#     make -j$(nproc)
-
-# WORKDIR /app/build
-# CMD ["./core"]

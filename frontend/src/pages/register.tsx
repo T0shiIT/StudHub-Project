@@ -5,17 +5,20 @@ import { useAuth } from '../context/AuthContext'
 export default function Register() {
   const navigate = useNavigate()
   const { refresh } = useAuth()
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [formData, setFormData] = useState({
-    email: '',
-    login: '',
-    password: '',
-    confirmPassword: '',
     firstName: '',
     lastName: '',
+    email: '',
+    login: '',
     group: '',
+    password: '',
+    confirmPassword: '',
     code: ''
   })
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -25,9 +28,18 @@ export default function Register() {
     setError('')
   }
 
+  const togglePassword = () => setShowPassword(!showPassword)
+  const toggleConfirmPassword = () => setShowConfirmPassword(!showConfirmPassword)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    if (!formData.firstName || !formData.lastName || !formData.email ||
+        !formData.login || !formData.group || !formData.password) {
+      setError('Заполните все поля')
+      return
+    }
 
     if (formData.password !== formData.confirmPassword) {
       setError('Пароли не совпадают')
@@ -39,6 +51,7 @@ export default function Register() {
       return
     }
 
+    setSubmitting(true)
     try {
       const response = await fetch('http://localhost:8080/api/auth/register', {
         method: 'POST',
@@ -56,16 +69,15 @@ export default function Register() {
       })
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        setError(data.error || 'Ошибка при регистрации')
+        const errBody = await response.json().catch(() => ({}))
+        setError(errBody.error || 'Ошибка при регистрации')
         return
       }
 
       const data = await response.json().catch(() => ({}))
       localStorage.setItem('registeredEmail', formData.email)
 
-      // Если бэкенд сообщил, что подтверждение не требуется (спец-код),
-      // сессия уже создана — подтягиваем профиль и ведём пользователя на главную.
+      // Если введён спец-код — бэкенд уже создал сессию, ведём сразу на главную.
       if (data && data.verified) {
         await refresh()
         localStorage.setItem('isAuthenticated', 'true')
@@ -74,19 +86,21 @@ export default function Register() {
         return
       }
 
-      // Сессия будет создана только после подтверждения email из письма.
+      // Иначе ждём, пока пользователь подтвердит email из письма.
       navigate('/register-success')
-    } catch (err) {
+    } catch {
       setError('Не удалось связаться с сервером')
+    } finally {
+      setSubmitting(false)
     }
   }
 
   return (
-    <div className="login-container">
-      <h1>Регистрация</h1>
-      <p style={{ marginBottom: '24px', color: '#64748b' }}>
-        Создайте аккаунт для доступа к платформе
-      </p>
+    <div className="register-container">
+      <div className="register-header">
+        <h1>Регистрация</h1>
+        <p>Создайте аккаунт для доступа к платформе</p>
+      </div>
 
       {error && <div className="error-message">{error}</div>}
 
@@ -98,7 +112,6 @@ export default function Register() {
             placeholder="Имя"
             value={formData.firstName}
             onChange={handleChange}
-            required
             className="form-input"
           />
           <input
@@ -107,7 +120,6 @@ export default function Register() {
             placeholder="Фамилия"
             value={formData.lastName}
             onChange={handleChange}
-            required
             className="form-input"
           />
         </div>
@@ -118,7 +130,6 @@ export default function Register() {
           placeholder="Email"
           value={formData.email}
           onChange={handleChange}
-          required
           className="form-input"
         />
 
@@ -128,7 +139,6 @@ export default function Register() {
           placeholder="Логин"
           value={formData.login}
           onChange={handleChange}
-          required
           className="form-input"
         />
 
@@ -138,29 +148,68 @@ export default function Register() {
           placeholder="Группа (например, ИС-2024)"
           value={formData.group}
           onChange={handleChange}
-          required
           className="form-input"
         />
 
-        <input
-          type="password"
-          name="password"
-          placeholder="Пароль"
-          value={formData.password}
-          onChange={handleChange}
-          required
-          className="form-input"
-        />
+        {/* Поле пароля с кнопкой показа */}
+        <div className="password-field">
+          <input
+            type={showPassword ? 'text' : 'password'}
+            name="password"
+            placeholder="Пароль"
+            value={formData.password}
+            onChange={handleChange}
+            className="form-input"
+          />
+          <button
+            type="button"
+            onClick={togglePassword}
+            className="password-toggle"
+            title={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+          >
+            {showPassword ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            )}
+          </button>
+        </div>
 
-        <input
-          type="password"
-          name="confirmPassword"
-          placeholder="Подтвердите пароль"
-          value={formData.confirmPassword}
-          onChange={handleChange}
-          required
-          className="form-input"
-        />
+        {/* Поле подтверждения пароля с кнопкой показа */}
+        <div className="password-field">
+          <input
+            type={showConfirmPassword ? 'text' : 'password'}
+            name="confirmPassword"
+            placeholder="Подтвердите пароль"
+            value={formData.confirmPassword}
+            onChange={handleChange}
+            className="form-input"
+          />
+          <button
+            type="button"
+            onClick={toggleConfirmPassword}
+            className="password-toggle"
+            title={showConfirmPassword ? 'Скрыть пароль' : 'Показать пароль'}
+          >
+            {showConfirmPassword ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            )}
+          </button>
+        </div>
 
         <input
           type="text"
@@ -171,14 +220,14 @@ export default function Register() {
           className="form-input"
         />
 
-        <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '16px' }}>
-          Зарегистрироваться
+        <button type="submit" className="btn btn-primary btn-register" disabled={submitting}>
+          {submitting ? 'Регистрация...' : 'Зарегистрироваться'}
         </button>
       </form>
 
-      <div className="auth-footer" style={{ marginTop: '20px' }}>
+      <div className="auth-footer">
         <p>Уже есть аккаунт?</p>
-        <Link to="/login" className="btn btn-outline" style={{ marginTop: '12px' }}>
+        <Link to="/login" className="btn btn-outline">
           Войти
         </Link>
       </div>
