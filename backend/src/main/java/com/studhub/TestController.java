@@ -92,9 +92,14 @@ public class TestController {
             return ResponseEntity.status(401).body("Unauthorized");
         }
 
-        String email = authentication.getName();
-
-       return userRepository.findByEmail(email)
+        String email;
+        if (authentication.getPrincipal() instanceof OAuth2User) {
+            email = ((OAuth2User) authentication.getPrincipal()).getAttribute("default_email");
+        } else {
+            email = authentication.getName();
+        }
+        
+        return userRepository.findByEmail(email)
         .map(user -> {
             String cppUrl = "http://cpp:8081/api/cpp/test_handler/change_role"; 
 
