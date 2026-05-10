@@ -23,6 +23,12 @@ pkg_check_modules(PQXX REQUIRED libpqxx)
 pkg_check_modules(LIBPQ REQUIRED libpq)
 
 include_directories(
+    handlers
+    handlers/user
+    handlers/new_user
+    handlers/get_data
+    handlers/schedule
+    handlers/tests
     /usr/local/include
     ${LIBPQ_INCLUDE_DIRS}
     ${PQXX_INCLUDE_DIRS}
@@ -33,10 +39,11 @@ include_directories(
 # link_directories(${LIBPQ_LIBRARY_DIRS})
 add_executable(core
     main.cpp
-    user/users_permissions.h
-    handlers/new_user.cpp
-    handlers/get_data.cpp
-    handlers/schedule_json.cpp
+    handlers/user/users_permissions.h
+    handlers/new_user/new_user.cpp
+    handlers/get_data/get_data.cpp
+    handlers/schedule/schedule_json.cpp
+    handlers/tests/user_set_role.cpp
 )
 
 target_link_libraries(core
