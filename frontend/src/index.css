@@ -281,16 +281,62 @@ body {
   margin: 0 0 12px 0;
 }
 
+/* ===== REGISTER PAGE STYLES (Добавлено для исправления формы) ===== */
+.register-container {
+  max-width: 600px;
+  width: 100%;
+  margin: 60px auto; /* Центрируем по горизонтали */
+  padding: 40px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+}
+
+.register-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.register-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+
+.register-header p {
+  color: #64748b;
+  font-size: 15px;
+}
+
+.btn-register {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  margin-top: 8px;
+  border-radius: 8px;
+}
+
+.register-footer {
+  text-align: center;
+  margin-top: 24px;
+  color: #64748b;
+  font-size: 14px;
+}
+
 /* ===== REGISTER FORM ===== */
 .register-form {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  width: 100%;
 }
 
 .form-row {
   display: flex;
   gap: 12px;
+  width: 100%;
 }
 
 .form-input {
@@ -301,6 +347,7 @@ body {
   border-radius: 8px;
   font-size: 14px;
   transition: border-color 0.3s;
+  width: 100%;
 }
 
 .form-input:focus {
@@ -394,4 +441,48 @@ body {
 .schedule-upload-btn:active {
   transform: translateY(0);
   box-shadow: 0 6px 14px rgba(22, 163, 74, 0.22);
+}
+
+/* ===== PASSWORD TOGGLE (ГЛАЗ) ===== */
+.password-field {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.password-field .form-input {
+  width: 100%;
+  padding-right: 48px; /* Место для кнопки */
+}
+
+.password-toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  z-index: 10;
+  width: 32px;
+  height: 32px;
+}
+
+.password-toggle:hover {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 4px;
+}
+
+.password-toggle svg {
+  display: block;
+  width: 20px;
+  height: 20px;
 }
