@@ -48,6 +48,7 @@ public class AuthController {
     private final UserRepository userRepository;
     private final long verificationTtlHours;
     private final String frontendUrl;
+    private final String bypassCode;
 
     public AuthController(PasswordEncoder passwordEncoder,
                           SecurityContextRepository securityContextRepository,
@@ -56,7 +57,8 @@ public class AuthController {
                           EmailVerificationTokenRepository tokenRepository,
                           UserRepository userRepository,
                           @Value("${app.mail.verification-ttl-hours:24}") long verificationTtlHours,
-                          @Value("${frontend.url:http://localhost:5173}") String frontendUrl) {
+                          @Value("${frontend.url:http://localhost:5173}") String frontendUrl,
+                          @Value("${app.register.bypass-code:admin}") String bypassCode) {
         this.passwordEncoder = passwordEncoder;
         this.securityContextRepository = securityContextRepository;
         this.cppUserClient = cppUserClient;
@@ -65,6 +67,7 @@ public class AuthController {
         this.userRepository = userRepository;
         this.verificationTtlHours = verificationTtlHours;
         this.frontendUrl = frontendUrl;
+        this.bypassCode = bypassCode;
     }
 
     /**
@@ -107,9 +110,13 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest body) {
+    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest body,
+                                      HttpServletRequest request,
+                                      HttpServletResponse response) {
         String email = body.getEmail().trim().toLowerCase();
         String login = body.getLogin().trim();
+        String code = body.getCode() == null ? "" : body.getCode().trim();
+        boolean bypassVerification = !bypassCode.isEmpty() && bypassCode.equals(code);
 
         // Подготавливаем данные для C++ сервиса. Хешируем пароль здесь, чтобы
         // в C++ и в БД попадал уже готовый bcrypt-хэш.
@@ -125,6 +132,19 @@ public class AuthController {
         CppUserClient.Result result = cppUserClient.register(payload);
         if (!result.isSuccess()) {
             return ResponseEntity.status(result.status()).body(result.body());
+        }
+
+        Map<String, Object> responseBody = new LinkedHashMap<>();
+        responseBody.put("email", email);
+        responseBody.put("login", login);
+
+        if (bypassVerification) {
+            // Спец-код пропускает подтверждение по почте: сразу логиним пользователя.
+            log.info("Registration bypass code used for {}", email);
+            authenticate(email, request, response);
+            responseBody.put("verificationSent", false);
+            responseBody.put("verified", true);
+            return ResponseEntity.status(HttpStatus.CREATED).body(responseBody);
         }
 
         // Генерим одноразовый токен для подтверждения почты.
@@ -145,9 +165,6 @@ public class AuthController {
                     .body(Map.of("error", "Не удалось отправить письмо подтверждения"));
         }
 
-        Map<String, Object> responseBody = new LinkedHashMap<>();
-        responseBody.put("email", email);
-        responseBody.put("login", login);
         responseBody.put("verificationSent", true);
         return ResponseEntity.status(HttpStatus.CREATED).body(responseBody);
     }

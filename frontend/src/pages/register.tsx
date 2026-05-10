@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 export default function Register() {
   const navigate = useNavigate()
+  const { refresh } = useAuth()
   const [formData, setFormData] = useState({
     email: '',
     login: '',
@@ -10,7 +12,8 @@ export default function Register() {
     confirmPassword: '',
     firstName: '',
     lastName: '',
-    group: ''
+    group: '',
+    code: ''
   })
   const [error, setError] = useState('')
 
@@ -47,7 +50,8 @@ export default function Register() {
           firstName: formData.firstName,
           lastName: formData.lastName,
           login: formData.login,
-          group: formData.group
+          group: formData.group,
+          code: formData.code
         })
       })
 
@@ -57,7 +61,19 @@ export default function Register() {
         return
       }
 
+      const data = await response.json().catch(() => ({}))
       localStorage.setItem('registeredEmail', formData.email)
+
+      // Если бэкенд сообщил, что подтверждение не требуется (спец-код),
+      // сессия уже создана — подтягиваем профиль и ведём пользователя на главную.
+      if (data && data.verified) {
+        await refresh()
+        localStorage.setItem('isAuthenticated', 'true')
+        localStorage.setItem('userEmail', formData.email)
+        navigate('/')
+        return
+      }
+
       // Сессия будет создана только после подтверждения email из письма.
       navigate('/register-success')
     } catch (err) {
@@ -143,6 +159,15 @@ export default function Register() {
           value={formData.confirmPassword}
           onChange={handleChange}
           required
+          className="form-input"
+        />
+
+        <input
+          type="text"
+          name="code"
+          placeholder="Код (необязательно)"
+          value={formData.code}
+          onChange={handleChange}
           className="form-input"
         />
 

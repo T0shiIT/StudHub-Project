@@ -30,6 +30,9 @@ public class RegisterRequest {
     @Size(max = 20)
     private String group;
 
+    @Size(max = 32)
+    private String code;
+
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
 
@@ -47,4 +50,7 @@ public class RegisterRequest {
 
     public String getGroup() { return group; }
     public void setGroup(String group) { this.group = group; }
+
+    public String getCode() { return code; }
+    public void setCode(String code) { this.code = code; }
 }
