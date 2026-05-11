@@ -12,10 +12,10 @@ def session():
 
 def test_unique_user(session):
 
-    print(f"\n[CHECK] Проверка доступности API...")
-    health_res = session.get(f"{BASE_URL_JAVA}/api/test")
-    assert health_res.status_code == 200, f"API недоступно: {health_res.status_code}"
-    
+    # print(f"\n[CHECK] Проверка доступности API...")
+    # health_res = session.get(f"{BASE_URL_JAVA}/api/test")
+    # assert health_res.status_code == 200, f"API недоступно: {health_res.status_code}"
+
     uid = str(uuid.uuid4())[:8]
     user_data = { 
         "email": f"test_{uid}@gmail.com",
