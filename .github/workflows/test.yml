@@ -31,12 +31,9 @@ jobs:
 
       - name: Run .sh diagnostic
         run: chmod +x ./scripts/test.sh && ./scripts/test.sh
-
-      - name: Run python tests
-        run: pytest -s tests/test_auth.py
       
       - name: Run python tests AUTHORIZATION TEST
-        run: pytest -s tests/tes_auth.py
+        run: pytest -s tests/test_auth.py
       
       - name: Stop services 
         if: always()
