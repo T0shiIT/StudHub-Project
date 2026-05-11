@@ -16,7 +16,8 @@ import java.util.Set;
 public class ScheduleController {
 
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".xlsx", ".xlsm", ".xlsb", ".xls");
-    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
+    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER =
+            new com.fasterxml.jackson.databind.ObjectMapper();
 
     private final CppUserClient cppUserClient;
     private final ScheduleParserClient scheduleParserClient;
@@ -28,7 +29,8 @@ public class ScheduleController {
     }
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<?> uploadSchedule(@RequestParam("file") MultipartFile file, Authentication authentication) {
+    public ResponseEntity<?> uploadSchedule(@RequestParam("file") MultipartFile file,
+                                            Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(401).body(Map.of("error", "Пользователь не авторизован"));
         }
@@ -40,35 +42,44 @@ public class ScheduleController {
         String originalName = file.getOriginalFilename() == null ? "" : file.getOriginalFilename();
         String extension = extractExtension(originalName);
         if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Поддерживаются форматы: .xlsx, .xlsm, .xlsb, .xls"));
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Поддерживаются форматы: .xlsx, .xlsm, .xlsb, .xls"));
         }
 
+        // Парсим Excel в JSON-строку
         String scheduleJson;
         try {
             scheduleJson = scheduleParserClient.parseToJson(file);
         } catch (IllegalStateException e) {
-            return ResponseEntity.internalServerError().body(Map.of("error", "Ошибка парсинга файла: " + e.getMessage()));
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", "Ошибка парсинга файла: " + e.getMessage()));
+        }
+
+        Object scheduleData;
+        try {
+            scheduleData = MAPPER.readValue(scheduleJson, Object.class);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", "Некорректный JSON от parser сервиса"));
         }
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("file_name", originalName);
         payload.put("file_type", extension);
         payload.put("uploaded_by", authentication.getName());
-        try {
-            payload.put("schedule_json", parseJsonObject(scheduleJson));
-        } catch (IllegalStateException e) {
-            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
-        }
+        payload.put("schedule_json", scheduleData);
 
         CppUserClient.Result saveResult = cppUserClient.uploadSchedule(payload);
         if (!saveResult.isSuccess()) {
             return ResponseEntity.status(saveResult.status()).body(saveResult.body());
         }
 
-        return ResponseEntity.ok(Map.of(
-                "message", "Расписание успешно загружено",
-                "saved", saveResult.body()
-        ));
+        // Ответ: сообщение + JSON расписания
+        Map<String, Object> responseBody = new LinkedHashMap<>();
+        responseBody.put("message", "Расписание успешно загружено");
+        responseBody.put("schedule", scheduleData);
+
+        return ResponseEntity.ok(responseBody);
     }
 
     @GetMapping("/latest")
@@ -83,13 +94,5 @@ public class ScheduleController {
             return "";
         }
         return fileName.substring(idx).toLowerCase();
-    }
-
-    private Object parseJsonObject(String json) {
-        try {
-            return MAPPER.readValue(json, Object.class);
-        } catch (Exception e) {
-            throw new IllegalStateException("Некорректный JSON от parser сервиса");
-        }
     }
 }
