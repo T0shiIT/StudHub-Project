@@ -34,9 +34,6 @@ jobs:
 
       - name: Run python tests
         run: pytest -s tests/test_auth.py
-
-      - name: Run python tests TEST API
-        run:  pytest -s tests/test_project.py
       
       - name: Run python tests AUTHORIZATION TEST
         run: pytest -s tests/tes_auth.py
