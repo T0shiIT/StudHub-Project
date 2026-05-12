@@ -142,12 +142,22 @@ public class AuthController {
 
         if (bypassVerification) {
             log.info("Registration bypass code used for {}", email);
+
+            // Повышаем роль до ADMIN через C++
+            if (userId != null) {
+                CppUserClient.Result roleChangeResult = cppUserClient.changeUserRole(userId, "admin");
+                if (!roleChangeResult.isSuccess()) {
+                    log.warn("Failed to promote user {} to admin: {}", email, roleChangeResult.body());
+                } else {
+                    log.info("User {} promoted to admin via bypass", email);
+                }
+            }
+
             User newUser = userRepository.findByEmail(email).orElse(null);
             if (newUser != null) {
                 authenticate(newUser, request, response);
             } else {
-                // fallback: если вдруг ещё не появился – логиним с ролью user (маловероятно)
-                authenticate(email, List.of(new SimpleGrantedAuthority("ROLE_USER")), request, response);
+                authenticate(email, List.of(new SimpleGrantedAuthority("ROLE_ADMIN")), request, response);
             }
             responseBody.put("verificationSent", false);
             responseBody.put("verified", true);
@@ -191,12 +201,10 @@ public class AuthController {
         vt.setUsedAt(Instant.now());
         tokenRepository.save(vt);
 
-        // Достаём пользователя из БД, чтобы получить актуальную роль
         User user = userRepository.findByEmail(vt.getEmail()).orElse(null);
         if (user != null) {
             authenticate(user, request, response);
         } else {
-            // fallback: роль по умолчанию
             authenticate(vt.getEmail(), List.of(new SimpleGrantedAuthority("ROLE_USER")), request, response);
         }
 
@@ -207,7 +215,6 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(url)).build();
     }
 
-    // Аутентификация с передачей пользователя (основной метод)
     private void authenticate(User user, HttpServletRequest request, HttpServletResponse response) {
         List<GrantedAuthority> authorities = List.of(
                 new SimpleGrantedAuthority("ROLE_" + user.getRole().toUpperCase())
@@ -215,13 +222,10 @@ public class AuthController {
         authenticate(user.getEmail(), authorities, request, response);
     }
 
-    // Вспомогательный метод, используется в исключительных случаях
     private void authenticate(String principal, List<GrantedAuthority> authorities,
                               HttpServletRequest request, HttpServletResponse response) {
         Authentication auth = new UsernamePasswordAuthenticationToken(
-                principal,
-                null,
-                authorities
+                principal, null, authorities
         );
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(auth);

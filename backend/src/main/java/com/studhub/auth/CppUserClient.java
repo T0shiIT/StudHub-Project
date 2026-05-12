@@ -13,10 +13,6 @@ import org.springframework.web.client.RestClientException;
 
 import java.util.Map;
 
-/**
- * Клиент для C++ сервиса, который выполняет фактическую запись пользователей в БД.
- * Java backend не пишет в таблицу app_users напрямую — он только проксирует данные сюда.
- */
 @Component
 public class CppUserClient {
 
@@ -63,16 +59,27 @@ public class CppUserClient {
         }
     }
 
+    /**
+
+     * @param userId идентификатор пользователя
+     * @param newRole новая роль (например, "admin")
+     */
+    public Result changeUserRole(Long userId, String newRole) {
+        Map<String, Object> payload = Map.of(
+                "user_id", userId,
+                "role", newRole
+        );
+        return call("/api/cpp/change-role", payload);
+    }
+
     private Result call(String uri, Map<String, ?> payload) {
         try {
-            // Берём ответ как сырую строку, чтобы избежать падения при пустом теле
-            // или неверном Content-Type со стороны C++ сервиса.
             ResponseEntity<String> response = restClient.post()
                     .uri(uri)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(payload)
                     .retrieve()
-                    .onStatus(status -> true, (req, res) -> { /* не бросаем — обработаем сами */ })
+                    .onStatus(status -> true, (req, res) -> { })
                     .toEntity(String.class);
 
             HttpStatus status = HttpStatus.valueOf(response.getStatusCode().value());
