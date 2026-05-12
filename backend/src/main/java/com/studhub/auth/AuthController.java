@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -70,12 +71,6 @@ public class AuthController {
         this.bypassCode = bypassCode;
     }
 
-    /**
-     * Вход по email/логину и паролю. Поле {@code email} принимает либо email,
-     * либо login — это удобнее для пользователя (форма на фронте одна и та же).
-     * При успехе создаётся HTTP-сессия — фронту достаточно слать запросы с
-     * {@code credentials: 'include'}, кука {@code JSESSIONID} попадёт автоматически.
-     */
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> body,
                                    HttpServletRequest request,
@@ -88,18 +83,16 @@ public class AuthController {
                     .body(Map.of("error", "Введите email/логин и пароль"));
         }
 
-        // Сначала пытаемся как email, потом — как login (форма принимает оба).
         User user = userRepository.findByEmail(identifier)
-                .or(() -> userRepository.findByLogin(body.getOrDefault("email", "").trim()))
+                .or(() -> userRepository.findByLogin(identifier))
                 .orElse(null);
 
         if (user == null || !passwordEncoder.matches(password, user.getPasswordHash())) {
-            // Намеренно не уточняем, что именно неверно — чтобы не давать подсказки злоумышленнику.
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "Неверный email/логин или пароль"));
         }
 
-        authenticate(user.getEmail(), request, response);
+        authenticate(user, request, response);
 
         Map<String, Object> profile = new LinkedHashMap<>();
         profile.put("id", user.getId());
@@ -119,8 +112,6 @@ public class AuthController {
         String code = body.getCode() == null ? "" : body.getCode().trim();
         boolean bypassVerification = !bypassCode.isEmpty() && bypassCode.equals(code);
 
-        // Подготавливаем данные для C++ сервиса. Хешируем пароль здесь, чтобы
-        // в C++ и в БД попадал уже готовый bcrypt-хэш.
         Map<String, String> payload = new LinkedHashMap<>();
         payload.put("email", email);
         payload.put("login", login);
@@ -129,15 +120,13 @@ public class AuthController {
         payload.put("last_name", body.getLastName().trim());
         payload.put("group_name", body.getGroup().trim());
 
-        // Запись в БД делает C++ сервис — Java сама в БД ничего не пишет.
         CppUserClient.Result result = cppUserClient.register(payload);
         if (!result.isSuccess()) {
             return ResponseEntity.status(result.status()).body(result.body());
         }
 
-         Long userId = null;
+        Long userId = null;
         try {
-            // result.body() — это Map с данными пользователя из C++
             if (result.body() instanceof Map) {
                 Map<String, Object> cppResponse = (Map<String, Object>) result.body();
                 userId = ((Number) cppResponse.get("id")).longValue();
@@ -152,15 +141,19 @@ public class AuthController {
         responseBody.put("login", login);
 
         if (bypassVerification) {
-            // Спец-код пропускает подтверждение по почте: сразу логиним пользователя.
             log.info("Registration bypass code used for {}", email);
-            authenticate(email, request, response);
+            User newUser = userRepository.findByEmail(email).orElse(null);
+            if (newUser != null) {
+                authenticate(newUser, request, response);
+            } else {
+                // fallback: если вдруг ещё не появился – логиним с ролью user (маловероятно)
+                authenticate(email, List.of(new SimpleGrantedAuthority("ROLE_USER")), request, response);
+            }
             responseBody.put("verificationSent", false);
             responseBody.put("verified", true);
             return ResponseEntity.status(HttpStatus.CREATED).body(responseBody);
         }
 
-        // Генерим одноразовый токен для подтверждения почты.
         EmailVerificationToken vt = new EmailVerificationToken();
         vt.setToken(UUID.randomUUID().toString().replace("-", ""));
         vt.setEmail(email);
@@ -168,8 +161,6 @@ public class AuthController {
         vt.setExpiresAt(Instant.now().plus(verificationTtlHours, ChronoUnit.HOURS));
         tokenRepository.save(vt);
 
-        // Отправляем письмо. Если SMTP недоступен — возвращаем 502, чтобы
-        // фронт показал внятную ошибку, но пользователь в C++ уже создан.
         try {
             mailService.sendVerification(email, login, vt.getToken());
         } catch (Exception e) {
@@ -182,10 +173,6 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(responseBody);
     }
 
-    /**
-     * Пользователь кликает по ссылке из письма. Помечаем токен использованным,
-     * создаём HTTP-сессию (логиним) и редиректим на главную страницу фронта.
-     */
     @GetMapping("/confirm")
     public ResponseEntity<Void> confirm(@RequestParam("token") String token,
                                         HttpServletRequest request,
@@ -204,9 +191,15 @@ public class AuthController {
         vt.setUsedAt(Instant.now());
         tokenRepository.save(vt);
 
-        authenticate(vt.getEmail(), request, response);
+        // Достаём пользователя из БД, чтобы получить актуальную роль
+        User user = userRepository.findByEmail(vt.getEmail()).orElse(null);
+        if (user != null) {
+            authenticate(user, request, response);
+        } else {
+            // fallback: роль по умолчанию
+            authenticate(vt.getEmail(), List.of(new SimpleGrantedAuthority("ROLE_USER")), request, response);
+        }
 
-        // Главная страница приложения
         return redirect(frontendUrl + "/?verified=1");
     }
 
@@ -214,11 +207,21 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(url)).build();
     }
 
-    private void authenticate(String principal, HttpServletRequest request, HttpServletResponse response) {
+    // Аутентификация с передачей пользователя (основной метод)
+    private void authenticate(User user, HttpServletRequest request, HttpServletResponse response) {
+        List<GrantedAuthority> authorities = List.of(
+                new SimpleGrantedAuthority("ROLE_" + user.getRole().toUpperCase())
+        );
+        authenticate(user.getEmail(), authorities, request, response);
+    }
+
+    // Вспомогательный метод, используется в исключительных случаях
+    private void authenticate(String principal, List<GrantedAuthority> authorities,
+                              HttpServletRequest request, HttpServletResponse response) {
         Authentication auth = new UsernamePasswordAuthenticationToken(
                 principal,
                 null,
-                List.of(new SimpleGrantedAuthority("ROLE_USER"))
+                authorities
         );
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(auth);

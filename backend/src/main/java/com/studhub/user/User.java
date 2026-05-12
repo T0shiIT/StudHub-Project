@@ -33,6 +33,9 @@ public class User {
     @Column(name = "group_name", nullable = false)
     private String groupName;
 
+    @Column(name = "role", nullable = false)
+    private String role = "user";   // роль по умолчанию
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -60,6 +63,9 @@ public class User {
 
     public String getGroupName() { return groupName; }
     public void setGroupName(String groupName) { this.groupName = groupName; }
+
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
 
     public Instant getCreatedAt() { return createdAt; }
 }

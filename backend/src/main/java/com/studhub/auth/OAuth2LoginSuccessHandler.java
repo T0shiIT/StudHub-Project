@@ -1,5 +1,6 @@
 package com.studhub.auth;
 
+import com.studhub.user.UserRepository;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -7,29 +8,32 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
-/**
- * После успешной авторизации через OAuth2 (Yandex) синхронизирует пользователя
- * в БД через C++ сервис и редиректит на фронтенд.
- */
 @Component
 public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
 
     private static final Logger log = LoggerFactory.getLogger(OAuth2LoginSuccessHandler.class);
 
     private final CppUserClient cppUserClient;
+    private final UserRepository userRepository;
     private final String frontendUrl;
 
     public OAuth2LoginSuccessHandler(CppUserClient cppUserClient,
+                                     UserRepository userRepository,
                                      @Value("${frontend.url:http://localhost:5173}") String frontendUrl) {
         this.cppUserClient = cppUserClient;
+        this.userRepository = userRepository;
         this.frontendUrl = frontendUrl;
         setDefaultTargetUrl(frontendUrl);
         setAlwaysUseDefaultTargetUrl(true);
@@ -46,8 +50,23 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
                 if (!result.isSuccess()) {
                     log.warn("OAuth2 user sync failed (status={}): {}", result.status(), result.body());
                 }
+
+                String email = payload.get("email");
+                if (email != null && !email.isBlank()) {
+                    userRepository.findByEmail(email).ifPresent(user -> {
+                        List<GrantedAuthority> authorities = List.of(
+                                new SimpleGrantedAuthority("ROLE_" + user.getRole().toUpperCase())
+                        );
+                        Authentication newAuth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                                authentication.getPrincipal(),
+                                authentication.getCredentials(),
+                                authorities
+                        );
+                        SecurityContextHolder.getContext().setAuthentication(newAuth);
+                        log.info("OAuth2 user {} authenticated with role {}", email, user.getRole());
+                    });
+                }
             } catch (Exception e) {
-                // Не блокируем вход в систему из-за проблем синхронизации с БД.
                 log.error("Failed to sync OAuth2 user with C++ service", e);
             }
         }
@@ -64,7 +83,6 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
         }
         String yandexLogin = stringAttr(attrs, "login");
         String externalId = stringAttr(attrs, "id");
-        // Чтобы yandex-логин не конфликтовал с обычной регистрацией.
         String login = "yandex:" + (yandexLogin != null && !yandexLogin.isBlank()
                 ? yandexLogin
                 : (externalId != null ? externalId : (email != null ? email : "unknown")));

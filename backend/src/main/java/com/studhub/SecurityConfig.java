@@ -3,6 +3,7 @@ package com.studhub;
 import com.studhub.auth.OAuth2LoginSuccessHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -30,11 +31,17 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**"))
                 .securityContext(sc -> sc.securityContextRepository(securityContextRepository))
                 .authorizeHttpRequests(auth -> auth
+                        // Публичные
                         .requestMatchers("/", "/api/test", "/api/auth/**", "/error").permitAll()
+                        // Только администраторы
+                        .requestMatchers(HttpMethod.POST, "/api/schedule/upload").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/user/change-role").hasRole("ADMIN")
+                        // Любой авторизованный пользователь
+                        .requestMatchers("/api/user", "/api/cpp-profile", "/api/schedule/latest").authenticated()
+                        // Всё остальное – только аутентифицированным
                         .anyRequest().authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2
-                        // После успешного входа синхронизируем пользователя в БД через C++ и редиректим на фронт.
                         .successHandler(oAuth2LoginSuccessHandler)
                 )
                 .logout(logout -> logout
