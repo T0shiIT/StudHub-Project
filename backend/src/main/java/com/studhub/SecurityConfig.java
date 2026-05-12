@@ -39,6 +39,8 @@ public class SecurityConfig {
                         // Редактирование оценок – учитель или администратор
                         .requestMatchers(HttpMethod.PATCH, "/api/grades/**")
                             .hasAnyRole("TEACHER", "ADMIN")
+                        // Скачивание файлов расписания – любой авторизованный
+                        .requestMatchers(HttpMethod.GET, "/api/schedule/download/**").authenticated()
                         // Любой авторизованный пользователь
                         .requestMatchers("/api/user", "/api/cpp-profile", "/api/schedule/latest",
                                          "/api/grades/**").authenticated()
