@@ -34,7 +34,7 @@ public class User {
     private String groupName;
 
     @Column(name = "role", nullable = false)
-    private String role = "user";   // роль по умолчанию
+    private String role = "STUDENT";   // роль по умолчанию
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -43,6 +43,8 @@ public class User {
     void onCreate() {
         this.createdAt = Instant.now();
     }
+
+    // Геттеры / сеттеры ...
 
     public Long getId() { return id; }
 

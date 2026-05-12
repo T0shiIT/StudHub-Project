@@ -10,6 +10,9 @@ namespace user_permissions {
         const std::string PROFILE_VIEW    = "profile:view";
         const std::string PROFILE_EDIT    = "profile:edit";
         const std::string USER_LIST_READ  = "user:list:read";
+        const std::string GRADE_EDIT      = "grade:edit";
+        const std::string SCHEDULE_UPLOAD = "schedule:upload";
+        const std::string USER_MANAGE     = "user:manage";
     }
 
     class User {
@@ -27,40 +30,43 @@ namespace user_permissions {
             return permissions.find(perm) != permissions.end();
         }
 
-        bool can_join_course() const    { return has_permission(Perm::COURSE_JOIN); }
-        bool can_view_profile() const   { return has_permission(Perm::PROFILE_VIEW); }
-        bool can_edit_profile() const   { return has_permission(Perm::PROFILE_EDIT); }
+        bool can_join_course()    const { return has_permission(Perm::COURSE_JOIN); }
+        bool can_view_profile()   const { return has_permission(Perm::PROFILE_VIEW); }
+        bool can_edit_profile()   const { return has_permission(Perm::PROFILE_EDIT); }
         bool can_view_user_list() const { return has_permission(Perm::USER_LIST_READ); }
+        bool can_edit_grades()    const { return has_permission(Perm::GRADE_EDIT); }
     };
+
+    // ------------------ Конкретные роли ------------------
 
     class Admin : public User {
     public:
         Admin() {
-            permissions = { Perm::COURSE_JOIN, Perm::PROFILE_VIEW,
-                            Perm::PROFILE_EDIT, Perm::USER_LIST_READ };
+            permissions = { Perm::COURSE_JOIN, Perm::PROFILE_VIEW, Perm::PROFILE_EDIT,
+                            Perm::USER_LIST_READ, Perm::GRADE_EDIT,
+                            Perm::SCHEDULE_UPLOAD, Perm::USER_MANAGE };
         }
     };
 
-    class Guest : public User {
+    class Teacher : public User {
     public:
-        Guest() {
-            permissions = { Perm::COURSE_JOIN, Perm::PROFILE_VIEW,
-                            Perm::PROFILE_EDIT };
+        Teacher() {
+            permissions = { Perm::COURSE_JOIN, Perm::PROFILE_VIEW, Perm::PROFILE_EDIT,
+                            Perm::USER_LIST_READ, Perm::GRADE_EDIT };
         }
     };
 
     class Student : public User {
     public:
         Student() {
-            permissions = { Perm::COURSE_JOIN, Perm::PROFILE_VIEW,
-                            Perm::PROFILE_EDIT };
+            permissions = { Perm::COURSE_JOIN, Perm::PROFILE_VIEW, Perm::PROFILE_EDIT };
         }
     };
 
     inline std::unique_ptr<User> create_user(const std::string& role) {
         if (role == "ADMIN")   return std::make_unique<Admin>();
+        if (role == "TEACHER") return std::make_unique<Teacher>();
         if (role == "STUDENT") return std::make_unique<Student>();
-        if (role == "GUEST")   return std::make_unique<Guest>();
         throw std::invalid_argument("Unknown role: " + role);
     }
 }

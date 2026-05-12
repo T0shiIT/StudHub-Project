@@ -7,7 +7,7 @@ CREATE TABLE app_users (
     last_name VARCHAR(255),
     group_name VARCHAR(255),
     is_blocked BOOLEAN DEFAULT FALSE,
-    role VARCHAR(255) DEFAULT 'GUEST',
+    role VARCHAR(255) DEFAULT 'STUDENT',
     password_hash TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -23,10 +23,9 @@ CREATE TABLE user_profile (
     profile_id SERIAL PRIMARY KEY,
     user_id INTEGER UNIQUE NOT NULL REFERENCES app_users(user_id) ON DELETE CASCADE,
     bio TEXT,
-    avatar_url VARCHAR(255) DEFAULT 'https://photos.app.goo.gl/3rVQBMCJnd1PWWQ99', --засунуть ссылку из облачного хранилища
+    avatar_url VARCHAR(255) DEFAULT 'https://photos.app.goo.gl/3rVQBMCJnd1PWWQ99',
     birthday DATE
 );
-
 
 CREATE TABLE study_groups (
     group_id SERIAL PRIMARY KEY,

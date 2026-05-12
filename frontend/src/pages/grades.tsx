@@ -26,7 +26,7 @@ const getGradeColor = (grade: number | null) => {
 
 export default function Grades() {
   const { user, isAuthenticated } = useAuth();
-  const role: UserRole = (user?.role as UserRole) || 'admin';
+  const role: UserRole = (user?.role as UserRole) || 'ADMIN'; // fallback, но обычно приходит из сервера
 
   const [journal, setJournal] = useState<JournalData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,7 +51,7 @@ export default function Grades() {
   }, []);
 
   const startEditing = (studentId: number, date: string, currentGrade: number | null) => {
-    if (role !== 'teacher') return;
+    if (role !== 'TEACHER') return;   // <-- только TEACHER может редактировать
     setEditingCell({ studentId, date });
     setTempGrade(currentGrade !== null ? String(currentGrade) : '');
   };
@@ -115,7 +115,7 @@ export default function Grades() {
   return (
     <div>
       <h2>Журнал оценок</h2>
-      {role === 'admin' && (
+      {role === 'ADMIN' && (   // <-- ADMIN
         <div style={{ marginBottom: '24px', padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #3b82f6' }}>
           <h3 style={{ marginBottom: '12px' }}>Загрузка данных из Excel</h3>
           <input
@@ -175,10 +175,10 @@ export default function Grades() {
                       padding: 0,
                       textAlign: 'center',
                       background: getGradeColor(grade),
-                      cursor: role === 'teacher' ? 'pointer' : 'default',
+                      cursor: role === 'TEACHER' ? 'pointer' : 'default',  // <-- TEACHER
                       transition: 'background 0.2s',
                     }}
-                    onClick={() => !isEditing && role === 'teacher' && startEditing(student.id, date, grade)}
+                    onClick={() => !isEditing && role === 'TEACHER' && startEditing(student.id, date, grade)}
                   >
                     {isSaving ? (
                       <span style={{ color: '#6b7280', fontSize: '14px' }}>...</span>
@@ -218,10 +218,10 @@ export default function Grades() {
 
       <p style={{ marginTop: '20px', color: '#64748b', fontSize: '14px' }}>
         Ваша роль: <b>{role}</b>.{' '}
-        {role === 'student' ? 'Режим только для чтения. Редактирование недоступно.' : ''}
-        {role === 'teacher' ? 'Кликните по любой ячейке, чтобы поставить оценку (2–5).' : ''}
-        {role === 'admin' ? 'Вам доступна загрузка Excel-файлов для массового импорта.' : ''}
+        {role === 'STUDENT' ? 'Режим только для чтения. Редактирование недоступно.' : ''}
+        {role === 'TEACHER' ? 'Кликните по любой ячейке, чтобы поставить оценку (2–5).' : ''}
+        {role === 'ADMIN' ? 'Вам доступна загрузка Excel-файлов для массового импорта.' : ''}
       </p>
     </div>
   );
-}   
+}

@@ -6,6 +6,9 @@
 #include <chrono>
 #include <string>
 
+#include "../user/users_permissions.h"
+#include "../db_utils.h"
+
 using json = nlohmann::json;
 extern std::string DB_CONN;
 
@@ -60,9 +63,27 @@ namespace {
 namespace handlers {
 
 void register_schedule_json_handlers(crow::SimpleApp& app) {
+    // Загрузка расписания (только ADMIN)
     CROW_ROUTE(app, "/api/cpp/schedule/upload-json").methods(crow::HTTPMethod::POST)
     ([](const crow::request& req) {
         try {
+            // Проверка прав
+            std::string user_id_str = req.get_header_value("X-User-Id");
+            if (user_id_str.empty()) {
+                return json_response(401, json{{"error", "Missing X-User-Id header"}});
+            }
+            int user_id = std::stoi(user_id_str);
+            auto user = load_user(user_id);
+            if (!user) {
+                return json_response(401, json{{"error", "Unknown user"}});
+            }
+            if (user->is_blocked) {
+                return json_response(403, json{{"error", "User is blocked"}});
+            }
+            if (!user->has_permission(user_permissions::Perm::SCHEDULE_UPLOAD)) {
+                return json_response(403, json{{"error", "Insufficient permissions"}});
+            }
+
             auto payload = json::parse(req.body);
 
             const std::string fileName = payload.value("file_name", "");
@@ -117,9 +138,26 @@ void register_schedule_json_handlers(crow::SimpleApp& app) {
         }
     });
 
+    // Получение последнего расписания (любой авторизованный)
     CROW_ROUTE(app, "/api/cpp/schedule/latest").methods(crow::HTTPMethod::GET)
-    ([]() {
+    ([](const crow::request& req) {
         try {
+            std::string user_id_str = req.get_header_value("X-User-Id");
+            if (user_id_str.empty()) {
+                return json_response(401, json{{"error", "Missing X-User-Id header"}});
+            }
+            int user_id = std::stoi(user_id_str);
+            auto user = load_user(user_id);
+            if (!user) {
+                return json_response(401, json{{"error", "Unknown user"}});
+            }
+            if (user->is_blocked) {
+                return json_response(403, json{{"error", "User is blocked"}});
+            }
+            if (!user->can_view_profile()) { // достаточно базового права
+                return json_response(403, json{{"error", "Insufficient permissions"}});
+            }
+
             pqxx::connection C(DB_CONN);
             pqxx::work W(C);
             W.exec(

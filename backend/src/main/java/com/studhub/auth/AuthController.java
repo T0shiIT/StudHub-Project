@@ -107,78 +107,78 @@ public class AuthController {
     public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest body,
                                   HttpServletRequest request,
                                   HttpServletResponse response) {
-    String email = body.getEmail().trim().toLowerCase();
-    String login = body.getLogin().trim();
-    String code = body.getCode() == null ? "" : body.getCode().trim();
-    boolean bypassVerification = !bypassCode.isEmpty() && bypassCode.equals(code);
+        String email = body.getEmail().trim().toLowerCase();
+        String login = body.getLogin().trim();
+        String code = body.getCode() == null ? "" : body.getCode().trim();
+        boolean bypassVerification = !bypassCode.isEmpty() && bypassCode.equals(code);
 
-    Map<String, String> payload = new LinkedHashMap<>();
-    payload.put("email", email);
-    payload.put("login", login);
-    payload.put("password_hash", passwordEncoder.encode(body.getPassword()));
-    payload.put("first_name", body.getFirstName().trim());
-    payload.put("last_name", body.getLastName().trim());
-    payload.put("group_name", body.getGroup().trim());
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("email", email);
+        payload.put("login", login);
+        payload.put("password_hash", passwordEncoder.encode(body.getPassword()));
+        payload.put("first_name", body.getFirstName().trim());
+        payload.put("last_name", body.getLastName().trim());
+        payload.put("group_name", body.getGroup().trim());
 
-    CppUserClient.Result result = cppUserClient.register(payload);
-    if (!result.isSuccess()) {
-        return ResponseEntity.status(result.status()).body(result.body());
-    }
-
-    Long userId = null;
-    try {
-        if (result.body() instanceof Map) {
-            Map<String, Object> cppResponse = (Map<String, Object>) result.body();
-            userId = ((Number) cppResponse.get("id")).longValue();
+        CppUserClient.Result result = cppUserClient.register(payload);
+        if (!result.isSuccess()) {
+            return ResponseEntity.status(result.status()).body(result.body());
         }
-    } catch (Exception e) {
-        log.warn("Failed to extract user id from C++ response", e);
-    }
 
-    Map<String, Object> responseBody = new LinkedHashMap<>();
-    responseBody.put("id", userId);
-    responseBody.put("email", email);
-    responseBody.put("login", login);
-
-    if (bypassVerification) {
-        log.info("Registration bypass code used for {}", email);
-
-        // Назначаем роль ADMIN напрямую через JPA
-        userRepository.findByEmail(email).ifPresent(user -> {
-            user.setRole("admin");
-            userRepository.save(user);
-            log.info("User {} promoted to admin via bypass", email);
-        });
-
-        User newUser = userRepository.findByEmail(email).orElse(null);
-        if (newUser != null) {
-            authenticate(newUser, request, response);
-        } else {
-            authenticate(email, List.of(new SimpleGrantedAuthority("ROLE_ADMIN")), request, response);
+        Long userId = null;
+        try {
+            if (result.body() instanceof Map) {
+                Map<String, Object> cppResponse = (Map<String, Object>) result.body();
+                userId = ((Number) cppResponse.get("id")).longValue();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to extract user id from C++ response", e);
         }
-        responseBody.put("verificationSent", false);
-        responseBody.put("verified", true);
+
+        Map<String, Object> responseBody = new LinkedHashMap<>();
+        responseBody.put("id", userId);
+        responseBody.put("email", email);
+        responseBody.put("login", login);
+
+        if (bypassVerification) {
+            log.info("Registration bypass code used for {}", email);
+
+            // Назначаем роль ADMIN напрямую через JPA (теперь в верхнем регистре)
+            userRepository.findByEmail(email).ifPresent(user -> {
+                user.setRole("ADMIN");
+                userRepository.save(user);
+                log.info("User {} promoted to admin via bypass", email);
+            });
+
+            User newUser = userRepository.findByEmail(email).orElse(null);
+            if (newUser != null) {
+                authenticate(newUser, request, response);
+            } else {
+                authenticate(email, List.of(new SimpleGrantedAuthority("ROLE_ADMIN")), request, response);
+            }
+            responseBody.put("verificationSent", false);
+            responseBody.put("verified", true);
+            return ResponseEntity.status(HttpStatus.CREATED).body(responseBody);
+        }
+
+        EmailVerificationToken vt = new EmailVerificationToken();
+        vt.setToken(UUID.randomUUID().toString().replace("-", ""));
+        vt.setEmail(email);
+        vt.setLogin(login);
+        vt.setExpiresAt(Instant.now().plus(verificationTtlHours, ChronoUnit.HOURS));
+        tokenRepository.save(vt);
+
+        try {
+            mailService.sendVerification(email, login, vt.getToken());
+        } catch (Exception e) {
+            log.error("Failed to send verification email to {}", email, e);
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                    .body(Map.of("error", "Не удалось отправить письмо подтверждения"));
+        }
+
+        responseBody.put("verificationSent", true);
         return ResponseEntity.status(HttpStatus.CREATED).body(responseBody);
     }
-
-    EmailVerificationToken vt = new EmailVerificationToken();
-    vt.setToken(UUID.randomUUID().toString().replace("-", ""));
-    vt.setEmail(email);
-    vt.setLogin(login);
-    vt.setExpiresAt(Instant.now().plus(verificationTtlHours, ChronoUnit.HOURS));
-    tokenRepository.save(vt);
-
-    try {
-        mailService.sendVerification(email, login, vt.getToken());
-    } catch (Exception e) {
-        log.error("Failed to send verification email to {}", email, e);
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
-                .body(Map.of("error", "Не удалось отправить письмо подтверждения"));
-    }
-
-    responseBody.put("verificationSent", true);
-    return ResponseEntity.status(HttpStatus.CREATED).body(responseBody);
-}
 
     @GetMapping("/confirm")
     public ResponseEntity<Void> confirm(@RequestParam("token") String token,

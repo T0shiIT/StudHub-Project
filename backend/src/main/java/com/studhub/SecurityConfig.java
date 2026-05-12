@@ -36,8 +36,12 @@ public class SecurityConfig {
                         // Только администраторы
                         .requestMatchers(HttpMethod.POST, "/api/schedule/upload").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/user/change-role").hasRole("ADMIN")
+                        // Редактирование оценок – учитель или администратор
+                        .requestMatchers(HttpMethod.PATCH, "/api/grades/**")
+                            .hasAnyRole("TEACHER", "ADMIN")
                         // Любой авторизованный пользователь
-                        .requestMatchers("/api/user", "/api/cpp-profile", "/api/schedule/latest").authenticated()
+                        .requestMatchers("/api/user", "/api/cpp-profile", "/api/schedule/latest",
+                                         "/api/grades/**").authenticated()
                         // Всё остальное – только аутентифицированным
                         .anyRequest().authenticated()
                 )
