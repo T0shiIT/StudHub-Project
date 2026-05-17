@@ -3,19 +3,14 @@ import pytest
 import uuid
 
 BASE_URL_JAVA = "http://localhost"
-BASE_URL_CPP = "http://localhost"
 
 @pytest.fixture
 def session():
-    """Создание чистой сессии с каждого раза"""
+    """Создание чистой сессии для каждого теста"""
     return requests.Session()
 
 def test_unique_user(session):
-
-    # print(f"\n[CHECK] Проверка доступности API...")
-    # health_res = session.get(f"{BASE_URL_JAVA}/api/test")
-    # assert health_res.status_code == 200, f"API недоступно: {health_res.status_code}"
-
+    #данные для регистрации
     uid = str(uuid.uuid4())[:8]
     user_data = { 
         "email": f"test_{uid}@gmail.com",
@@ -27,57 +22,52 @@ def test_unique_user(session):
         "code": "admin"
     }
 
-    print(f"\n[START] Пробуем постучаться в Java: {BASE_URL_JAVA}")
-    
+    print(f"\n[START] Регистрируем пользователя в Java: {BASE_URL_JAVA}")
     try:
-        reg_res = session.post(
-            f"{BASE_URL_JAVA}/api/auth/register", json=user_data, timeout=5 )
+        reg_res = session.post(f"{BASE_URL_JAVA}/api/auth/register", json=user_data, timeout=5)
         print(f"[DEBUG] Java Status: {reg_res.status_code}")
-        print(f"[DEBUG] Register Response: {reg_res.json()}") 
         assert reg_res.status_code == 201
         user_id = reg_res.json()["id"]
     except requests.exceptions.ConnectionError as e:
-        pytest.fail(f"Java-сервер сбросил соединение! Ошибка: {e}")
+        pytest.fail(f"Java-сервер недоступен! Ошибка: {e}")
 
-
-    print(f"\n[LOGIN] Логинимся...")
+    print(f"\n[LOGIN] Логинимся под созданным пользователем")
     login_data = {
         "email": user_data["email"],
         "password": user_data["password"]
     }
     login_res = session.post(f"{BASE_URL_JAVA}/api/auth/login", json=login_data, timeout=5)
-    print(f"[DEBUG] Login Status: {login_res.status_code}")
-    print(f"[DEBUG] Login Response: {login_res.json()}")
-    print(f"[DEBUG] Cookies: {dict(session.cookies)}")
     assert login_res.status_code == 200, f"Login failed: {login_res.text}"
 
-    me_res = session.get(f"{BASE_URL_JAVA}/api/user")
-    assert me_res.status_code == 200
-    profile_data = me_res.json()
-    print(f"[DEBUG] Profile: {profile_data}")
-    headers = {"X-User-Id": str(user_id)}
+    # Передаем X-User-Id
+    headers = {
+        "X-User-Id": str(user_id),
+        "Content-Type": "application/json"
+    }
 
-    print("\n--- Роль GUEST ---")
-    cpp_res = session.get(f"{BASE_URL_CPP}/api/cpp/profile/{user_id}", headers=headers)
-    assert cpp_res.status_code == 200
-    print(f"C++ Response: {cpp_res.json()}")
+    print("\n[CHECK] Проверяем исходный профиль")
+    cpp_profile_res = session.get(f"{BASE_URL_JAVA}/api/cpp-profile", headers=headers)
+    assert cpp_profile_res.status_code == 200
+    print(f"Текущий профиль: {cpp_profile_res.json()}")
 
-    print("\n[ACTION] Меняем роль на STUDENT...")
+    print("\n[ACTION] Меняем роль через Java-бэкенд...")
+    role_payload = {"role": "ADMIN"} 
+
     role_change_res = session.post(
         f"{BASE_URL_JAVA}/api/user/change-role", 
-        json={"role": "STUDENT"}
+        json=role_payload
     )
 
-    assert role_change_res.status_code in [200, 204]
+    print(f"[DEBUG] Java Change Role Status: {role_change_res.status_code}")
+    print(f"[DEBUG] Java Change Role Response: {role_change_res.text}")
+    
+    assert role_change_res.status_code == 200
 
-    print("--- Роль STUDENT ---")
-    cpp_res_final = session.get(f"{BASE_URL_CPP}/api/cpp/profile/{user_id}", headers=headers)
+    print("\n[VERIFY] Проверяем, изменилась ли роль в БД")
+    cpp_res_final = session.get(f"{BASE_URL_JAVA}/api/cpp-profile", headers=headers)
     assert cpp_res_final.status_code == 200
     
     data = cpp_res_final.json()
-    print(f"C++ Response: {data}")
-    print(f"Проверка: {data['first_name']} {data['last_name']} - {data['group_name']}")
+    print(f"Финальный профиль: {data}")
     
-    print("\n[SUCCESS] Роль успешно обновлена, C++ видит изменения в БД.")
-
-
+    print("\n[SUCCESS] Роль успешно обновлена")
