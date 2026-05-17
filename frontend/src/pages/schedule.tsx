@@ -132,7 +132,7 @@ export default function Schedule() {
                     {cell !== null ? cell : ''}
                   </td>
                 ))}
-              </table>
+              </tr>
             ))}
           </tbody>
         </table>
