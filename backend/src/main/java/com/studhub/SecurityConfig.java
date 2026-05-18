@@ -37,13 +37,15 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/schedule/upload").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/user/change-role").hasRole("ADMIN")
                         // Редактирование оценок – учитель или администратор
-                        .requestMatchers(HttpMethod.PATCH, "/api/grades/**")
-                            .hasAnyRole("TEACHER", "ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/grades/**").hasAnyRole("TEACHER", "ADMIN")
+                        // Загрузка Excel с оценками – учитель или администратор
+                        .requestMatchers(HttpMethod.POST, "/api/grades/upload").hasAnyRole("TEACHER", "ADMIN")
+                        // Просмотр оценок – любой аутентифицированный (включая студентов)
+                        .requestMatchers(HttpMethod.GET, "/api/grades/**").authenticated()
                         // Скачивание файлов расписания – любой авторизованный
                         .requestMatchers(HttpMethod.GET, "/api/schedule/download/**").authenticated()
                         // Любой авторизованный пользователь
-                        .requestMatchers("/api/user", "/api/cpp-profile", "/api/schedule/latest",
-                                         "/api/grades/**").authenticated()
+                        .requestMatchers("/api/user", "/api/cpp-profile", "/api/schedule/latest").authenticated()
                         // Всё остальное – только аутентифицированным
                         .anyRequest().authenticated()
                 )
@@ -72,7 +74,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration cfg = new CorsConfiguration();
         cfg.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost"));
-        cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));
         cfg.setAllowCredentials(true);
 
