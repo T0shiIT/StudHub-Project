@@ -83,9 +83,9 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
         }
         String yandexLogin = stringAttr(attrs, "login");
         String externalId = stringAttr(attrs, "id");
-        String login = "yandex:" + (yandexLogin != null && !yandexLogin.isBlank()
+        String login = yandexLogin != null && !yandexLogin.isBlank()
                 ? yandexLogin
-                : (externalId != null ? externalId : (email != null ? email : "unknown")));
+                : (externalId != null ? externalId : (email != null ? email : "unknown"));
 
         String firstName = stringAttr(attrs, "first_name");
         String lastName = stringAttr(attrs, "last_name");

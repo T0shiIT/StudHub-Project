@@ -33,8 +33,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Публичные
                         .requestMatchers("/", "/api/test", "/api/auth/**", "/error").permitAll()
+                        // Роль для загрузки расписания проверяется в контроллере по актуальным данным из БД.
+                        .requestMatchers(HttpMethod.POST, "/api/schedule/upload").authenticated()
                         // Только администраторы
-                        .requestMatchers(HttpMethod.POST, "/api/schedule/upload").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/user/change-role").hasRole("ADMIN")
                         // Редактирование оценок – учитель или администратор
                         .requestMatchers(HttpMethod.PATCH, "/api/grades/**").hasAnyRole("TEACHER", "ADMIN")

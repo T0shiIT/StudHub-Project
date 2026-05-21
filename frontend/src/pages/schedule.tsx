@@ -1,5 +1,9 @@
 import { useRef, useState } from 'react';
 
+const API_BASE_URL = 'http://localhost:8080';
+const SCHEDULE_UPLOAD_URL = `${API_BASE_URL}/api/schedule/upload`;
+const SUPPORTED_EXCEL_EXTENSIONS = '.xlsx,.xls,.xlsm,.xlsb';
+
 // ---------- Интерфейсы (из вашего JSON-файла) ----------
 interface Cell {
   columnIndex: number;
@@ -33,11 +37,6 @@ export default function Schedule() {
   const [scheduleData, setScheduleData] = useState<ScheduleData | null>(null);
   const [currentSheetIndex, setCurrentSheetIndex] = useState(0);
 
-  // Настройки – измените под свой бэкенд
-  const UPLOAD_URL = '/api/schedule/upload';
-  // Если нужен токен авторизации (например, из localStorage)
-  const authToken = localStorage.getItem('accessToken'); // или откуда вы его берёте
-
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -51,11 +50,9 @@ export default function Schedule() {
     formData.append('file', file);
 
     try {
-      const response = await fetch(UPLOAD_URL, {
+      const response = await fetch(SCHEDULE_UPLOAD_URL, {
         method: 'POST',
-        headers: {
-          ...(authToken && { Authorization: `Bearer ${authToken}` }),
-        },
+        credentials: 'include',
         body: formData,
       });
 
@@ -150,7 +147,7 @@ export default function Schedule() {
         ref={fileInputRef}
         style={{ display: 'none' }}
         onChange={handleFileChange}
-        accept=".xlsx,.xls"
+        accept={SUPPORTED_EXCEL_EXTENSIONS}
       />
 
       <button onClick={() => fileInputRef.current?.click()}>

@@ -1,14 +1,18 @@
 package com.studhub.schedule;
 
 import com.studhub.auth.CppUserClient;
+import com.studhub.user.User;
+import com.studhub.user.UserRepository;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 @RestController
@@ -16,16 +20,22 @@ import java.util.Set;
 public class ScheduleController {
 
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".xlsx", ".xlsm", ".xlsb", ".xls");
+    private static final String ADMIN_ROLE = "ADMIN";
+    private static final String DEFAULT_EMAIL_ATTRIBUTE = "default_email";
+    private static final String EMAIL_ATTRIBUTE = "email";
     private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER =
             new com.fasterxml.jackson.databind.ObjectMapper();
 
     private final CppUserClient cppUserClient;
     private final ScheduleParserClient scheduleParserClient;
+    private final UserRepository userRepository;
 
     public ScheduleController(CppUserClient cppUserClient,
-                              ScheduleParserClient scheduleParserClient) {
+                              ScheduleParserClient scheduleParserClient,
+                              UserRepository userRepository) {
         this.cppUserClient = cppUserClient;
         this.scheduleParserClient = scheduleParserClient;
+        this.userRepository = userRepository;
     }
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -33,6 +43,14 @@ public class ScheduleController {
                                             Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(401).body(Map.of("error", "Пользователь не авторизован"));
+        }
+
+        User currentUser = resolveCurrentUser(authentication).orElse(null);
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Пользователь не найден"));
+        }
+        if (!ADMIN_ROLE.equalsIgnoreCase(currentUser.getRole())) {
+            return ResponseEntity.status(403).body(Map.of("error", "Нет прав доступа: требуется роль ADMIN"));
         }
 
         if (file.isEmpty()) {
@@ -66,10 +84,10 @@ public class ScheduleController {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("file_name", originalName);
         payload.put("file_type", extension);
-        payload.put("uploaded_by", authentication.getName());
+        payload.put("uploaded_by", currentUser.getEmail());
         payload.put("schedule_json", scheduleData);
 
-        CppUserClient.Result saveResult = cppUserClient.uploadSchedule(payload);
+        CppUserClient.Result saveResult = cppUserClient.uploadSchedule(currentUser.getId(), payload);
         if (!saveResult.isSuccess()) {
             return ResponseEntity.status(saveResult.status()).body(saveResult.body());
         }
@@ -83,9 +101,43 @@ public class ScheduleController {
     }
 
     @GetMapping("/latest")
-    public ResponseEntity<?> latestSchedule() {
-        CppUserClient.Result result = cppUserClient.latestSchedule();
+    public ResponseEntity<?> latestSchedule(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(401).body(Map.of("error", "Пользователь не авторизован"));
+        }
+
+        User currentUser = resolveCurrentUser(authentication).orElse(null);
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Пользователь не найден"));
+        }
+
+        CppUserClient.Result result = cppUserClient.latestSchedule(currentUser.getId());
         return ResponseEntity.status(result.status()).body(result.body());
+    }
+
+    private Optional<User> resolveCurrentUser(Authentication authentication) {
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof OAuth2User oAuth2User) {
+            String email = stringAttribute(oAuth2User, DEFAULT_EMAIL_ATTRIBUTE);
+            if (email == null || email.isBlank()) {
+                email = stringAttribute(oAuth2User, EMAIL_ATTRIBUTE);
+            }
+            if (email != null && !email.isBlank()) {
+                return userRepository.findByEmail(email.toLowerCase());
+            }
+        }
+
+        String identifier = authentication.getName();
+        if (identifier == null || identifier.isBlank()) {
+            return Optional.empty();
+        }
+        return userRepository.findByEmail(identifier.toLowerCase())
+                .or(() -> userRepository.findByLogin(identifier));
+    }
+
+    private String stringAttribute(OAuth2User user, String attributeName) {
+        Object value = user.getAttribute(attributeName);
+        return value == null ? null : value.toString();
     }
 
     private String extractExtension(String fileName) {

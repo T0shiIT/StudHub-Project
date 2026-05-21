@@ -47,6 +47,15 @@ public class TestController {
 
         // Вход через Yandex OAuth2
         if (oAuth2User != null) {
+            String email = oAuth2User.getAttribute("default_email");
+            if (email == null || email.isBlank()) {
+                email = oAuth2User.getAttribute("email");
+            }
+            if (email != null && !email.isBlank()) {
+                return userRepository.findByEmail(email.toLowerCase())
+                        .map(this::toProfile)
+                        .orElse(oAuth2User.getAttributes());
+            }
             return oAuth2User.getAttributes();
         }
 
@@ -128,6 +137,7 @@ public class TestController {
         result.put("firstName", u.getFirstName());
         result.put("lastName", u.getLastName());
         result.put("group", u.getGroupName());
+        result.put("role", u.getRole());
         // Поля, которые ожидает текущий profile.tsx
         result.put("real_name", u.getFirstName() + " " + u.getLastName());
         result.put("default_email", u.getEmail());

@@ -18,6 +18,7 @@ public class CppUserClient {
 
     private static final Logger log = LoggerFactory.getLogger(CppUserClient.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final String USER_ID_HEADER = "X-User-Id";
 
     private final RestClient restClient;
     private final String baseUrl;
@@ -37,14 +38,15 @@ public class CppUserClient {
         return call("/api/cpp/sync-oauth-user", payload);
     }
 
-    public Result uploadSchedule(Map<String, ?> payload) {
-        return call("/api/cpp/schedule/upload-json", payload);
+    public Result uploadSchedule(Long userId, Map<String, ?> payload) {
+        return call("/api/cpp/schedule/upload-json", payload, userId);
     }
 
-    public Result latestSchedule() {
+    public Result latestSchedule(Long userId) {
         try {
             ResponseEntity<String> response = restClient.get()
                     .uri("/api/cpp/schedule/latest")
+                    .header(USER_ID_HEADER, String.valueOf(userId))
                     .retrieve()
                     .onStatus(status -> true, (req, res) -> { })
                     .toEntity(String.class);
@@ -73,10 +75,19 @@ public class CppUserClient {
     }
 
     private Result call(String uri, Map<String, ?> payload) {
+        return call(uri, payload, null);
+    }
+
+    private Result call(String uri, Map<String, ?> payload, Long userId) {
         try {
-            ResponseEntity<String> response = restClient.post()
+            RestClient.RequestBodySpec request = restClient.post()
                     .uri(uri)
-                    .contentType(MediaType.APPLICATION_JSON)
+                    .contentType(MediaType.APPLICATION_JSON);
+            if (userId != null) {
+                request = request.header(USER_ID_HEADER, String.valueOf(userId));
+            }
+
+            ResponseEntity<String> response = request
                     .body(payload)
                     .retrieve()
                     .onStatus(status -> true, (req, res) -> { })
