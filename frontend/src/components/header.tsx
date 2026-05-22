@@ -1,19 +1,22 @@
-import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { fetchWithCsrf } from '../utils/csrf';
 
 export default function Header() {
-  const navigate = useNavigate()
-  const { user, isAuthenticated } = useAuth()
+  const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
 
-  const handleLogin = () => {
-    navigate('/login')
-  }
+  const handleLogin = () => navigate('/login');
 
-  const handleLogout = () => {
-    localStorage.removeItem('isAuthenticated')
-    // Завершаем серверную сессию, чтобы OAuth/Session статус сбросился корректно.
-    window.location.href = 'http://localhost:8080/logout'
-  }
+  const handleLogout = async () => {
+    localStorage.removeItem('isAuthenticated');
+    try {
+      await fetchWithCsrf('http://localhost:8080/logout', { method: 'POST' });
+    } catch (e) {
+      console.error('Logout error', e);
+    }
+    window.location.href = 'http://localhost:5173';
+  };
 
   return (
     <header className="header">
@@ -22,24 +25,16 @@ export default function Header() {
         {isAuthenticated ? (
           <>
             <span>{user?.login || user?.default_email || 'Пользователь'}</span>
-            <button 
-              className="btn" 
-              onClick={handleLogout}
-              style={{ background: '#ef4444' }}
-            >
+            <button className="btn" onClick={handleLogout} style={{ background: '#ef4444' }}>
               Выйти
             </button>
           </>
         ) : (
-          <button 
-            className="btn" 
-            onClick={handleLogin}
-            style={{ background: '#3b82f6' }}
-          >
+          <button className="btn" onClick={handleLogin} style={{ background: '#3b82f6' }}>
             Войти
           </button>
         )}
       </div>
     </header>
-  )
+  );
 }

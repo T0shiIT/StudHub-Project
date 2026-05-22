@@ -2,7 +2,6 @@ package com.studhub.grade;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.studhub.auth.CppUserClient;
 import com.studhub.grade.dto.GradeDto;
 import com.studhub.grade.dto.GradeUploadResponse;
 import com.studhub.grade.dto.UpdateGradeRequest;
@@ -20,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/grades")
@@ -30,10 +30,8 @@ public class GradeController {
     private final ScheduleParserClient parserClient;
     private final ObjectMapper objectMapper;
 
-    public GradeController(GradeService gradeService,
-                           UserRepository userRepository,
-                           ScheduleParserClient parserClient,
-                           ObjectMapper objectMapper) {
+    public GradeController(GradeService gradeService, UserRepository userRepository,
+                           ScheduleParserClient parserClient, ObjectMapper objectMapper) {
         this.gradeService = gradeService;
         this.userRepository = userRepository;
         this.parserClient = parserClient;
@@ -44,86 +42,71 @@ public class GradeController {
     public ResponseEntity<?> getGrades(@RequestParam(required = false) String group,
                                        @RequestParam(required = false) String subject,
                                        Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) {
-            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
-        }
+        if (auth == null || !auth.isAuthenticated()) return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
 
         String email = auth.getName();
-        User currentUser = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User currentUser = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
 
-        if ("STUDENT".equals(currentUser.getRole())) {
-            List<GradeDto> grades = gradeService.getGradesForStudent(currentUser.getId());
-            return ResponseEntity.ok(grades);
+        if ("STUDENT".equalsIgnoreCase(currentUser.getRole())) {
+            return ResponseEntity.ok(gradeService.getGradesForStudent(currentUser.getId()));
         }
 
         if (group == null || group.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Parameter 'group' is required for teacher/admin"));
         }
-        List<GradeDto> grades = gradeService.getGradesForGroup(group, subject);
-        return ResponseEntity.ok(grades);
+        return ResponseEntity.ok(gradeService.getGradesForGroup(group, subject));
     }
 
     @PatchMapping("/{gradeId}")
-    public ResponseEntity<?> updateGrade(@PathVariable Long gradeId,
-                                         @Valid @RequestBody UpdateGradeRequest request,
-                                         Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) {
-            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
-        }
+    public ResponseEntity<?> updateGrade(@PathVariable Long gradeId, @Valid @RequestBody UpdateGradeRequest request, Authentication auth) {
+        if (auth == null || !auth.isAuthenticated()) return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
 
         String email = auth.getName();
-        User teacher = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User teacher = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (!"TEACHER".equals(teacher.getRole()) && !"ADMIN".equals(teacher.getRole())) {
+        if (!"TEACHER".equalsIgnoreCase(teacher.getRole()) && !"ADMIN".equalsIgnoreCase(teacher.getRole())) {
             return ResponseEntity.status(403).body(Map.of("error", "Insufficient permissions"));
         }
 
         try {
-            GradeDto updated = gradeService.updateGrade(gradeId, request, teacher.getId());
-            return ResponseEntity.ok(updated);
+            return ResponseEntity.ok(gradeService.updateGrade(gradeId, request, teacher.getId()));
         } catch (RuntimeException e) {
             return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
         }
     }
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<?> uploadGrades(@RequestParam("file") MultipartFile file,
-                                          Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) {
-            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
-        }
+    public ResponseEntity<?> uploadGrades(@RequestParam("file") MultipartFile file, Authentication auth) {
+        if (auth == null || !auth.isAuthenticated()) return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
 
         String email = auth.getName();
-        User teacher = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User teacher = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (!"TEACHER".equals(teacher.getRole()) && !"ADMIN".equals(teacher.getRole())) {
+        if (!"TEACHER".equalsIgnoreCase(teacher.getRole()) && !"ADMIN".equalsIgnoreCase(teacher.getRole())) {
             return ResponseEntity.status(403).body(Map.of("error", "Only teachers and admins can upload grades"));
         }
-
-        if (file.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "File is empty"));
-        }
+        if (file.isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "File is empty"));
 
         try {
             String jsonString = parserClient.parseToJson(file);
             JsonNode root = objectMapper.readTree(jsonString);
             JsonNode sheets = root.path("sheets");
-            if (!sheets.isArray() || sheets.isEmpty()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "No sheets found in Excel"));
-            }
+            if (!sheets.isArray() || sheets.isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "No sheets found"));
 
-            // Берём первый лист
-            JsonNode firstSheet = sheets.get(0);
-            JsonNode records = firstSheet.path("records");
-            if (!records.isArray()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "No records found in sheet"));
-            }
+            JsonNode records = sheets.get(0).path("records");
+            if (!records.isArray()) return ResponseEntity.badRequest().body(Map.of("error", "No records found"));
 
-            int processed = 0;
-            int failed = 0;
+            // Оптимизация: собираем все email и делаем один запрос в БД
+            List<String> emails = new ArrayList<>();
+            for (JsonNode record : records) {
+                String sEmail = record.path("student_email").asText();
+                if (!sEmail.isBlank()) emails.add(sEmail);
+            }
+            
+            Map<String, User> studentsMap = userRepository.findAllByEmailIn(emails).stream()
+                    .collect(Collectors.toMap(User::getEmail, u -> u, (a, b) -> a));
+
+            int processed = 0, failed = 0;
             DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
             for (JsonNode record : records) {
@@ -134,14 +117,13 @@ public class GradeController {
                     String dateStr = record.path("date").asText();
 
                     if (studentEmail.isBlank() || subject.isBlank() || gradeValue.isBlank() || dateStr.isBlank()) {
-                        failed++;
-                        continue;
+                        failed++; continue;
                     }
 
-                    User student = userRepository.findByEmail(studentEmail)
-                            .orElseThrow(() -> new RuntimeException("Student not found: " + studentEmail));
-                    LocalDate date = LocalDate.parse(dateStr, dateFormatter);
+                    User student = studentsMap.get(studentEmail);
+                    if (student == null) { failed++; continue; }
 
+                    LocalDate date = LocalDate.parse(dateStr, dateFormatter);
                     gradeService.saveGrade(student, subject, gradeValue, date, teacher);
                     processed++;
                 } catch (Exception e) {
@@ -149,14 +131,9 @@ public class GradeController {
                 }
             }
 
-            GradeUploadResponse response = new GradeUploadResponse();
-            response.setProcessed(processed);
-            response.setFailed(failed);
-            response.setMessage("Upload completed");
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(new GradeUploadResponse(processed, failed, "Upload completed"));
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Failed to process file: " + e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Failed to process file: " + e.getMessage()));
         }
     }
 }

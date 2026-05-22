@@ -37,7 +37,7 @@ public class ScheduleController {
         this.scheduleParserClient = scheduleParserClient;
         this.userRepository = userRepository;
     }
-
+    
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> uploadSchedule(@RequestParam("file") MultipartFile file,
                                             Authentication authentication) {
@@ -46,6 +46,12 @@ public class ScheduleController {
         }
 
         User currentUser = resolveCurrentUser(authentication).orElse(null);
+        // В методе uploadSchedule, после получения currentUser:
+        System.out.println("====== DEBUG SCHEDULE UPLOAD ======");
+        System.out.println("Email из сессии: " + authentication.getName());
+        System.out.println("Email из БД: " + currentUser.getEmail());
+        System.out.println("Роль из БД (длина " + currentUser.getRole().length() + "): [" + currentUser.getRole() + "]");
+        System.out.println("===================================");
         if (currentUser == null) {
             return ResponseEntity.status(401).body(Map.of("error", "Пользователь не найден"));
         }
