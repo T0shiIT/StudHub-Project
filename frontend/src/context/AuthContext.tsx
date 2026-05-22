@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { ensureCsrfToken, fetchWithCsrf } from '../utils/csrf';
 
 interface AuthContextType {
   user: any;
@@ -15,9 +16,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkAuth = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/user', {
-        credentials: 'include', // ОБЯЗАТЕЛЬНО для передачи куки сессии
-      });
+      // Гарантируем наличие CSRF-токена перед любыми запросами
+      await ensureCsrfToken();
+
+      const response = await fetchWithCsrf('http://localhost:8080/api/user');
+
       if (response.ok) {
         const data = await response.json();
         if (data && !data.error) {
@@ -31,7 +34,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(null);
         localStorage.removeItem('isAuthenticated');
       }
-    } catch (error) {
+    } catch {
       setUser(null);
     } finally {
       setLoading(false);

@@ -12,6 +12,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -26,33 +28,36 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            SecurityContextRepository securityContextRepository,
                                            OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler) throws Exception {
+
+        // Отключаем отложенную генерацию CSRF, чтобы cookie XSRF-TOKEN
+        // устанавливалась сразу при первом GET-запросе.
+        CsrfTokenRequestAttributeHandler csrfHandler = new CsrfTokenRequestAttributeHandler();
+        csrfHandler.setCsrfRequestAttributeName(null);
+
         http
                 .cors(Customizer.withDefaults())
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**"))
+                .csrf(csrf -> csrf
+                        // Cookie доступна для JavaScript (HttpOnly = false)
+                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRequestHandler(csrfHandler)
+                        // Публичные эндпоинты без CSRF (пользователь еще не аутентифицирован)
+                        .ignoringRequestMatchers("/api/auth/**", "/api/test", "/api/csrf", "/error")
+                )
                 .securityContext(sc -> sc.securityContextRepository(securityContextRepository))
                 .authorizeHttpRequests(auth -> auth
-                        // Публичные
-                        .requestMatchers("/", "/api/test", "/api/auth/**", "/error").permitAll()
-                        // Только администраторы
-                        .requestMatchers(HttpMethod.POST, "/api/schedule/upload").hasRole("ADMIN")
+                        .requestMatchers("/", "/api/test", "/api/csrf", "/api/auth/**", "/error").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/schedule/upload").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/user/change-role").hasRole("ADMIN")
-                        // Редактирование оценок – учитель или администратор
                         .requestMatchers(HttpMethod.PATCH, "/api/grades/**").hasAnyRole("TEACHER", "ADMIN")
-                        // Загрузка Excel с оценками – учитель или администратор
                         .requestMatchers(HttpMethod.POST, "/api/grades/upload").hasAnyRole("TEACHER", "ADMIN")
-                        // Просмотр оценок – любой аутентифицированный (включая студентов)
                         .requestMatchers(HttpMethod.GET, "/api/grades/**").authenticated()
-                        // Скачивание файлов расписания – любой авторизованный
                         .requestMatchers(HttpMethod.GET, "/api/schedule/download/**").authenticated()
-                        // Любой авторизованный пользователь
                         .requestMatchers("/api/user", "/api/cpp-profile", "/api/schedule/latest").authenticated()
-                        // Всё остальное – только аутентифицированным
                         .anyRequest().authenticated()
                 )
-                .oauth2Login(oauth2 -> oauth2
-                        .successHandler(oAuth2LoginSuccessHandler)
-                )
+                .oauth2Login(oauth2 -> oauth2.successHandler(oAuth2LoginSuccessHandler))
                 .logout(logout -> logout
+                        .logoutUrl("/logout")
                         .logoutSuccessUrl("http://localhost:5173")
                         .permitAll()
                 );
@@ -60,15 +65,8 @@ public class SecurityConfig {
         return http.build();
     }
 
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
-
-    @Bean
-    public SecurityContextRepository securityContextRepository() {
-        return new HttpSessionSecurityContextRepository();
-    }
+    @Bean public PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
+    @Bean public SecurityContextRepository securityContextRepository() { return new HttpSessionSecurityContextRepository(); }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
@@ -76,8 +74,7 @@ public class SecurityConfig {
         cfg.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost"));
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));
-        cfg.setAllowCredentials(true);
-
+        cfg.setAllowCredentials(true); // Обязательно для передачи cookie
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", cfg);
         return source;

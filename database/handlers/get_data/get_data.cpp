@@ -13,28 +13,17 @@ void get_user_profile_handler(crow::SimpleApp& app) {
     CROW_ROUTE(app, "/api/cpp/profile/<int>")
     ([](const crow::request& req, int target_user_id) {
         try {
-            // --- извлечение id запрашивающего из заголовка ---
             std::string requester_id_str = req.get_header_value("X-User-Id");
-            if (requester_id_str.empty()) {
-                return crow::response(401, "Missing X-User-Id header");
-            }
+            if (requester_id_str.empty()) return crow::response(401, "Missing X-User-Id header");
             int requester_id = std::stoi(requester_id_str);
 
-            // --- загрузка пользователя и проверка прав ---
             auto user = load_user(requester_id);
-            if (!user) {
-                return crow::response(401, "Unknown user");
-            }
-            if (user->is_blocked) {
-                return crow::response(403, "User is blocked");
-            }
-            if (!user->can_view_profile()) {
-                return crow::response(403, "Insufficient permissions");
-            }
+            if (!user) return crow::response(401, "Unknown user");
+            if (user->is_blocked) return crow::response(403, "User is blocked");
+            if (!user->can_view_profile()) return crow::response(403, "Insufficient permissions");
 
-            // --- сам запрос профиля ---
-            pqxx::connection C(DB_CONN);
-            pqxx::read_transaction TR(C);
+            auto conn = ConnectionPool::instance().acquire();
+            pqxx::read_transaction TR(*conn);
             pqxx::result r = TR.exec_params(
                 "SELECT u.email, u.first_name, u.last_name, u.group_name, "
                 "p.bio, p.avatar_url "
@@ -42,9 +31,7 @@ void get_user_profile_handler(crow::SimpleApp& app) {
                 "LEFT JOIN user_profile p ON u.user_id = p.user_id "
                 "WHERE u.user_id = $1", target_user_id);
 
-            if (r.empty()) {
-                return crow::response(404, "User not found");
-            }
+            if (r.empty()) return crow::response(404, "User not found");
 
             auto row = r[0];
             json res;

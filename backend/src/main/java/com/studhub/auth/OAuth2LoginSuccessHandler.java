@@ -10,13 +10,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -24,92 +25,42 @@ import java.util.Map;
 public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
 
     private static final Logger log = LoggerFactory.getLogger(OAuth2LoginSuccessHandler.class);
-
     private final CppUserClient cppUserClient;
     private final UserRepository userRepository;
-    private final String frontendUrl;
+    private final SecurityContextRepository securityContextRepository;
 
-    public OAuth2LoginSuccessHandler(CppUserClient cppUserClient,
-                                     UserRepository userRepository,
+    public OAuth2LoginSuccessHandler(CppUserClient cppUserClient, UserRepository userRepository,
+                                     SecurityContextRepository securityContextRepository,
                                      @Value("${frontend.url:http://localhost:5173}") String frontendUrl) {
         this.cppUserClient = cppUserClient;
         this.userRepository = userRepository;
-        this.frontendUrl = frontendUrl;
+        this.securityContextRepository = securityContextRepository;
         setDefaultTargetUrl(frontendUrl);
         setAlwaysUseDefaultTargetUrl(true);
     }
 
     @Override
-    public void onAuthenticationSuccess(HttpServletRequest request,
-                                        HttpServletResponse response,
-                                        Authentication authentication) throws IOException, ServletException {
+    public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
         if (authentication.getPrincipal() instanceof OAuth2User principal) {
-            try {
-                Map<String, String> payload = buildPayload(principal);
-                CppUserClient.Result result = cppUserClient.syncOAuth(payload);
-                if (!result.isSuccess()) {
-                    log.warn("OAuth2 user sync failed (status={}): {}", result.status(), result.body());
-                }
+            Map<String, Object> attrs = principal.getAttributes();
+            String email = attrs.get("default_email") != null ? attrs.get("default_email").toString() : 
+                          (attrs.get("email") != null ? attrs.get("email").toString() : null);
 
-                String email = payload.get("email");
-                if (email != null && !email.isBlank()) {
-                    userRepository.findByEmail(email).ifPresent(user -> {
-                        List<GrantedAuthority> authorities = List.of(
-                                new SimpleGrantedAuthority("ROLE_" + user.getRole().toUpperCase())
-                        );
-                        Authentication newAuth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
-                                authentication.getPrincipal(),
-                                authentication.getCredentials(),
-                                authorities
-                        );
-                        SecurityContextHolder.getContext().setAuthentication(newAuth);
-                        log.info("OAuth2 user {} authenticated with role {}", email, user.getRole());
-                    });
-                }
-            } catch (Exception e) {
-                log.error("Failed to sync OAuth2 user with C++ service", e);
+            if (email != null && !email.isBlank()) {
+                userRepository.findByEmail(email.toLowerCase()).ifPresent(user -> {
+                    List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().toUpperCase()));
+                    Authentication newAuth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                            principal, authentication.getCredentials(), authorities);
+                    
+                    SecurityContext context = SecurityContextHolder.createEmptyContext();
+                    context.setAuthentication(newAuth);
+                    SecurityContextHolder.setContext(context);
+                    
+                    // Критически важно: сохраняем контекст в сессию
+                    securityContextRepository.saveContext(context, request, response);
+                });
             }
         }
-
         super.onAuthenticationSuccess(request, response, authentication);
-    }
-
-    private Map<String, String> buildPayload(OAuth2User principal) {
-        Map<String, Object> attrs = principal.getAttributes();
-
-        String email = stringAttr(attrs, "default_email");
-        if (email == null || email.isBlank()) {
-            email = stringAttr(attrs, "email");
-        }
-        String yandexLogin = stringAttr(attrs, "login");
-        String externalId = stringAttr(attrs, "id");
-        String login = "yandex:" + (yandexLogin != null && !yandexLogin.isBlank()
-                ? yandexLogin
-                : (externalId != null ? externalId : (email != null ? email : "unknown")));
-
-        String firstName = stringAttr(attrs, "first_name");
-        String lastName = stringAttr(attrs, "last_name");
-        if ((firstName == null || firstName.isBlank()) && (lastName == null || lastName.isBlank())) {
-            String realName = stringAttr(attrs, "real_name");
-            if (realName != null && !realName.isBlank()) {
-                String[] parts = realName.trim().split("\\s+", 2);
-                firstName = parts[0];
-                lastName = parts.length > 1 ? parts[1] : "";
-            }
-        }
-
-        Map<String, String> payload = new LinkedHashMap<>();
-        payload.put("email", email == null ? "" : email.toLowerCase());
-        payload.put("login", login);
-        payload.put("first_name", firstName == null ? "" : firstName);
-        payload.put("last_name", lastName == null ? "" : lastName);
-        payload.put("group_name", "—");
-        payload.put("password_hash", "oauth:yandex");
-        return payload;
-    }
-
-    private String stringAttr(Map<String, Object> attrs, String key) {
-        Object v = attrs.get(key);
-        return v == null ? null : v.toString();
     }
 }
