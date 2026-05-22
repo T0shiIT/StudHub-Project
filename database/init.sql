@@ -1,5 +1,5 @@
 -- USERS
-CREATE TABLE app_users (
+CREATE TABLE IF NOT EXISTS app_users (
     user_id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
     login VARCHAR(255) UNIQUE NOT NULL,
@@ -13,22 +13,33 @@ CREATE TABLE app_users (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- ROLES таблица хранит список доступных ролей
-CREATE TABLE roles (
-    role_id SERIAL PRIMARY KEY,
-    role_name VARCHAR(255) UNIQUE NOT NULL
+CREATE TABLE IF NOT EXISTS grades (
+    id SERIAL PRIMARY KEY,
+    student_id INTEGER NOT NULL REFERENCES app_users(user_id),
+    subject VARCHAR(255) NOT NULL,
+    grade VARCHAR(50) NOT NULL,
+    date DATE NOT NULL,
+    teacher_id INTEGER REFERENCES app_users(user_id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_student_subject_date UNIQUE (student_id, subject, date)
 );
 
-CREATE TABLE user_profile (
-    profile_id SERIAL PRIMARY KEY,
-    user_id INTEGER UNIQUE NOT NULL REFERENCES app_users(user_id) ON DELETE CASCADE,
-    bio TEXT,
-    avatar_url VARCHAR(255) DEFAULT 'https://photos.app.goo.gl/3rVQBMCJnd1PWWQ99',
-    birthday DATE
+CREATE TABLE IF NOT EXISTS schedule_uploads (
+    id SERIAL PRIMARY KEY,
+    file_name TEXT NOT NULL,
+    file_type VARCHAR(16) NOT NULL,
+    schedule_json JSONB NOT NULL,
+    uploaded_by VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE study_groups (
-    group_id SERIAL PRIMARY KEY,
-    group_name VARCHAR(50) UNIQUE NOT NULL,
-    kafedra VARCHAR(100)
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
+    id SERIAL PRIMARY KEY,
+    token VARCHAR(64) UNIQUE NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    login VARCHAR(255) NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    used_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

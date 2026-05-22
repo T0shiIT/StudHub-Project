@@ -20,20 +20,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -51,15 +43,12 @@ public class AuthController {
     private final String frontendUrl;
     private final String bypassCode;
 
-    public AuthController(PasswordEncoder passwordEncoder,
-                          SecurityContextRepository securityContextRepository,
-                          CppUserClient cppUserClient,
-                          MailService mailService,
-                          EmailVerificationTokenRepository tokenRepository,
-                          UserRepository userRepository,
+    public AuthController(PasswordEncoder passwordEncoder, SecurityContextRepository securityContextRepository,
+                          CppUserClient cppUserClient, MailService mailService,
+                          EmailVerificationTokenRepository tokenRepository, UserRepository userRepository,
                           @Value("${app.mail.verification-ttl-hours:24}") long verificationTtlHours,
                           @Value("${frontend.url:http://localhost:5173}") String frontendUrl,
-                          @Value("${app.register.bypass-code:admin}") String bypassCode) {
+                          @Value("${app.register.bypass-code:}") String bypassCode) { // Пустой дефолт для безопасности
         this.passwordEncoder = passwordEncoder;
         this.securityContextRepository = securityContextRepository;
         this.cppUserClient = cppUserClient;
@@ -72,90 +61,56 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody Map<String, String> body,
-                                   HttpServletRequest request,
-                                   HttpServletResponse response) {
+    public ResponseEntity<?> login(@RequestBody Map<String, String> body, HttpServletRequest request, HttpServletResponse response) {
         String identifier = body.getOrDefault("email", "").trim().toLowerCase();
         String password = body.getOrDefault("password", "");
 
-        if (identifier.isEmpty() || password.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("error", "Введите email/логин и пароль"));
-        }
+        if (identifier.isEmpty() || password.isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "Введите email/логин и пароль"));
 
-        User user = userRepository.findByEmail(identifier)
-                .or(() -> userRepository.findByLogin(identifier))
-                .orElse(null);
+        User user = userRepository.findByEmail(identifier).or(() -> userRepository.findByLogin(identifier)).orElse(null);
 
         if (user == null || !passwordEncoder.matches(password, user.getPasswordHash())) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", "Неверный email/логин или пароль"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Неверный email/логин или пароль"));
         }
 
         authenticate(user, request, response);
-
-        Map<String, Object> profile = new LinkedHashMap<>();
-        profile.put("id", user.getId());
-        profile.put("email", user.getEmail());
-        profile.put("login", user.getLogin());
-        profile.put("firstName", user.getFirstName());
-        profile.put("lastName", user.getLastName());
-        return ResponseEntity.ok(profile);
+        return ResponseEntity.ok(buildProfile(user));
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest body,
-                                  HttpServletRequest request,
-                                  HttpServletResponse response) {
+    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest body, HttpServletRequest request, HttpServletResponse response) {
         String email = body.getEmail().trim().toLowerCase();
         String login = body.getLogin().trim();
         String code = body.getCode() == null ? "" : body.getCode().trim();
         boolean bypassVerification = !bypassCode.isEmpty() && bypassCode.equals(code);
 
-        Map<String, String> payload = new LinkedHashMap<>();
-        payload.put("email", email);
-        payload.put("login", login);
-        payload.put("password_hash", passwordEncoder.encode(body.getPassword()));
-        payload.put("first_name", body.getFirstName().trim());
-        payload.put("last_name", body.getLastName().trim());
-        payload.put("group_name", body.getGroup().trim());
-
-        CppUserClient.Result result = cppUserClient.register(payload);
-        if (!result.isSuccess()) {
-            return ResponseEntity.status(result.status()).body(result.body());
+        if (userRepository.existsByEmail(email) || userRepository.existsByLogin(login)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "Пользователь уже существует"));
         }
 
-        Long userId = null;
-        try {
-            if (result.body() instanceof Map) {
-                Map<String, Object> cppResponse = (Map<String, Object>) result.body();
-                userId = ((Number) cppResponse.get("id")).longValue();
-            }
-        } catch (Exception e) {
-            log.warn("Failed to extract user id from C++ response", e);
-        }
+        // Сохраняем напрямую в Java БД, чтобы избежать рассинхрона кэша Hibernate и C++
+        User newUser = new User();
+        newUser.setEmail(email);
+        newUser.setLogin(login);
+        newUser.setPasswordHash(passwordEncoder.encode(body.getPassword()));
+        newUser.setFirstName(body.getFirstName().trim());
+        newUser.setLastName(body.getLastName().trim());
+        newUser.setGroupName(body.getGroup().trim());
+        newUser.setRole(bypassVerification ? "ADMIN" : "STUDENT");
+        
+        userRepository.save(newUser);
 
-        Map<String, Object> responseBody = new LinkedHashMap<>();
-        responseBody.put("id", userId);
-        responseBody.put("email", email);
-        responseBody.put("login", login);
+        // Уведомляем C++ сервис (если ему нужны эти данные для своей логики)
+        Map<String, String> payload = Map.of(
+            "user_id", String.valueOf(newUser.getId()),
+            "email", email, "login", login, "role", newUser.getRole()
+        );
+        cppUserClient.syncOAuth(payload); // Используем sync как апдейт
+
+        Map<String, Object> responseBody = buildProfile(newUser);
 
         if (bypassVerification) {
-            log.info("Registration bypass code used for {}", email);
-
-            // Назначаем роль ADMIN напрямую через JPA (теперь в верхнем регистре)
-            userRepository.findByEmail(email).ifPresent(user -> {
-                user.setRole("ADMIN");
-                userRepository.save(user);
-                log.info("User {} promoted to admin via bypass", email);
-            });
-
-            User newUser = userRepository.findByEmail(email).orElse(null);
-            if (newUser != null) {
-                authenticate(newUser, request, response);
-            } else {
-                authenticate(email, List.of(new SimpleGrantedAuthority("ROLE_ADMIN")), request, response);
-            }
+            authenticate(newUser, request, response);
             responseBody.put("verificationSent", false);
             responseBody.put("verified", true);
             return ResponseEntity.status(HttpStatus.CREATED).body(responseBody);
@@ -171,9 +126,7 @@ public class AuthController {
         try {
             mailService.sendVerification(email, login, vt.getToken());
         } catch (Exception e) {
-            log.error("Failed to send verification email to {}", email, e);
-            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
-                    .body(Map.of("error", "Не удалось отправить письмо подтверждения"));
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", "Не удалось отправить письмо"));
         }
 
         responseBody.put("verificationSent", true);
@@ -181,31 +134,30 @@ public class AuthController {
     }
 
     @GetMapping("/confirm")
-    public ResponseEntity<Void> confirm(@RequestParam("token") String token,
-                                        HttpServletRequest request,
-                                        HttpServletResponse response) {
+    public ResponseEntity<Void> confirm(@RequestParam("token") String token, HttpServletRequest request, HttpServletResponse response) {
         EmailVerificationToken vt = tokenRepository.findByToken(token).orElse(null);
-        if (vt == null) {
-            return redirect(frontendUrl + "/login?verify=invalid");
-        }
-        if (vt.isUsed()) {
-            return redirect(frontendUrl + "/login?verify=used");
-        }
-        if (vt.isExpired()) {
-            return redirect(frontendUrl + "/login?verify=expired");
-        }
+        if (vt == null) return redirect(frontendUrl + "/login?verify=invalid");
+        if (vt.isUsed()) return redirect(frontendUrl + "/login?verify=used");
+        if (vt.isExpired()) return redirect(frontendUrl + "/login?verify=expired");
 
         vt.setUsedAt(Instant.now());
         tokenRepository.save(vt);
 
         User user = userRepository.findByEmail(vt.getEmail()).orElse(null);
-        if (user != null) {
-            authenticate(user, request, response);
-        } else {
-            authenticate(vt.getEmail(), List.of(new SimpleGrantedAuthority("ROLE_USER")), request, response);
-        }
-
+        if (user != null) authenticate(user, request, response);
+        
         return redirect(frontendUrl + "/?verified=1");
+    }
+
+    private Map<String, Object> buildProfile(User user) {
+        Map<String, Object> profile = new LinkedHashMap<>();
+        profile.put("id", user.getId());
+        profile.put("email", user.getEmail());
+        profile.put("login", user.getLogin());
+        profile.put("firstName", user.getFirstName());
+        profile.put("lastName", user.getLastName());
+        profile.put("role", user.getRole());
+        return profile;
     }
 
     private static ResponseEntity<Void> redirect(String url) {
@@ -213,24 +165,11 @@ public class AuthController {
     }
 
     private void authenticate(User user, HttpServletRequest request, HttpServletResponse response) {
-        List<GrantedAuthority> authorities = List.of(
-                new SimpleGrantedAuthority("ROLE_" + user.getRole().toUpperCase())
-        );
-        authenticate(user.getEmail(), authorities, request, response);
-    }
-
-    private void authenticate(String principal, List<GrantedAuthority> authorities,
-                              HttpServletRequest request, HttpServletResponse response) {
-        Authentication auth = new UsernamePasswordAuthenticationToken(
-                principal, null, authorities
-        );
+        List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().toUpperCase()));
+        Authentication auth = new UsernamePasswordAuthenticationToken(user.getEmail(), null, authorities);
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(auth);
         SecurityContextHolder.setContext(context);
-
         securityContextRepository.saveContext(context, request, response);
-
-        HttpSession session = request.getSession(true);
-        session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
     }
 }

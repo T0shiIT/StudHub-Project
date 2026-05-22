@@ -25,19 +25,14 @@ namespace {
         std::string out;
         out.reserve(input.size());
         for (char c : input) {
-            if ((c >= 'a' && c <= 'z') ||
-                (c >= 'A' && c <= 'Z') ||
-                (c >= '0' && c <= '9') ||
-                c == '.' || c == '_' || c == '-') {
+            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-') {
                 out.push_back(c);
             } else {
                 out.push_back('_');
             }
         }
-        if (out.empty()) {
-            return "schedule.xlsx";
-        }
-        return out;
+        return out.empty() ? "schedule.xlsx" : out;
     }
 
     std::string save_schedule_json_file(const std::string& originalFileName, const std::string& jsonContent) {
@@ -51,9 +46,7 @@ namespace {
         fs::path filePath = fs::path(SCHEDULE_FILES_DIR) / finalName;
 
         std::ofstream file(filePath, std::ios::binary);
-        if (!file.is_open()) {
-            throw std::runtime_error("Unable to open file for schedule JSON writing");
-        }
+        if (!file.is_open()) throw std::runtime_error("Unable to open file for schedule JSON writing");
         file << jsonContent;
         file.close();
         return finalName;
@@ -67,25 +60,18 @@ void register_schedule_json_handlers(crow::SimpleApp& app) {
     CROW_ROUTE(app, "/api/cpp/schedule/upload-json").methods(crow::HTTPMethod::POST)
     ([](const crow::request& req) {
         try {
-            // Проверка прав
             std::string user_id_str = req.get_header_value("X-User-Id");
-            if (user_id_str.empty()) {
-                return json_response(401, json{{"error", "Missing X-User-Id header"}});
-            }
+            if (user_id_str.empty()) return json_response(401, json{{"error", "Missing X-User-Id header"}});
+            
             int user_id = std::stoi(user_id_str);
             auto user = load_user(user_id);
-            if (!user) {
-                return json_response(401, json{{"error", "Unknown user"}});
-            }
-            if (user->is_blocked) {
-                return json_response(403, json{{"error", "User is blocked"}});
-            }
+            if (!user) return json_response(401, json{{"error", "Unknown user"}});
+            if (user->is_blocked) return json_response(403, json{{"error", "User is blocked"}});
             if (!user->has_permission(user_permissions::Perm::SCHEDULE_UPLOAD)) {
                 return json_response(403, json{{"error", "Insufficient permissions"}});
             }
 
             auto payload = json::parse(req.body);
-
             const std::string fileName = payload.value("file_name", "");
             const std::string fileType = payload.value("file_type", "");
             const std::string uploadedBy = payload.value("uploaded_by", "");
@@ -96,34 +82,19 @@ void register_schedule_json_handlers(crow::SimpleApp& app) {
 
             const std::string scheduleJson = payload["schedule_json"].dump();
 
-            pqxx::connection C(DB_CONN);
-            if (!C.is_open()) {
-                return json_response(500, json{{"error", "DB connection failed"}});
-            }
+            auto conn = ConnectionPool::instance().acquire();
+            if (!conn->is_open()) return json_response(500, json{{"error", "DB connection failed"}});
 
-            pqxx::work W(C);
-            W.exec(
-                "CREATE TABLE IF NOT EXISTS schedule_uploads ("
-                " id SERIAL PRIMARY KEY,"
-                " file_name TEXT NOT NULL,"
-                " file_type VARCHAR(16) NOT NULL,"
-                " schedule_json JSONB NOT NULL,"
-                " uploaded_by VARCHAR(255) NOT NULL,"
-                " created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP"
-                ")"
-            );
-
-            W.exec(
-                "ALTER TABLE schedule_uploads "
-                "ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP"
-            );
-
+            pqxx::work W(*conn);
+            // DDL (CREATE TABLE / ALTER TABLE) удален. Таблица должна существовать в БД.
+            
             pqxx::result inserted = W.exec_params(
                 "INSERT INTO schedule_uploads (file_name, file_type, schedule_json, uploaded_by) "
                 "VALUES ($1, $2, $3::jsonb, $4) RETURNING id, created_at",
                 fileName, fileType, scheduleJson, uploadedBy
             );
             W.commit();
+            
             std::string savedJsonFile = save_schedule_json_file(fileName, scheduleJson);
 
             json res;
@@ -143,47 +114,22 @@ void register_schedule_json_handlers(crow::SimpleApp& app) {
     ([](const crow::request& req) {
         try {
             std::string user_id_str = req.get_header_value("X-User-Id");
-            if (user_id_str.empty()) {
-                return json_response(401, json{{"error", "Missing X-User-Id header"}});
-            }
+            if (user_id_str.empty()) return json_response(401, json{{"error", "Missing X-User-Id header"}});
+            
             int user_id = std::stoi(user_id_str);
             auto user = load_user(user_id);
-            if (!user) {
-                return json_response(401, json{{"error", "Unknown user"}});
-            }
-            if (user->is_blocked) {
-                return json_response(403, json{{"error", "User is blocked"}});
-            }
-            if (!user->can_view_profile()) { // достаточно базового права
-                return json_response(403, json{{"error", "Insufficient permissions"}});
-            }
+            if (!user) return json_response(401, json{{"error", "Unknown user"}});
+            if (user->is_blocked) return json_response(403, json{{"error", "User is blocked"}});
+            if (!user->can_view_profile()) return json_response(403, json{{"error", "Insufficient permissions"}});
 
-            pqxx::connection C(DB_CONN);
-            pqxx::work W(C);
-            W.exec(
-                "CREATE TABLE IF NOT EXISTS schedule_uploads ("
-                " id SERIAL PRIMARY KEY,"
-                " file_name TEXT NOT NULL,"
-                " file_type VARCHAR(16) NOT NULL,"
-                " schedule_json JSONB NOT NULL,"
-                " uploaded_by VARCHAR(255) NOT NULL,"
-                " created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP"
-                ")"
-            );
-            W.exec(
-                "ALTER TABLE schedule_uploads "
-                "ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP"
-            );
-            W.commit();
-            pqxx::read_transaction T(C);
+            auto conn = ConnectionPool::instance().acquire();
+            pqxx::read_transaction T(*conn);
             pqxx::result r = T.exec(
                 "SELECT id, file_name, file_type, schedule_json::text, uploaded_by, created_at "
                 "FROM schedule_uploads ORDER BY created_at DESC LIMIT 1"
             );
 
-            if (r.empty()) {
-                return json_response(200, json{{"message", "Расписание еще не загружено"}});
-            }
+            if (r.empty()) return json_response(200, json{{"message", "Расписание еще не загружено"}});
 
             auto row = r[0];
             json res;

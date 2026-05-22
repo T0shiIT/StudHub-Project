@@ -6,10 +6,15 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "grades", indexes = {
-    @Index(name = "idx_grade_student", columnList = "student_id"),
-    @Index(name = "idx_grade_subject", columnList = "subject")
-})
+@Table(name = "grades", 
+    indexes = {
+        @Index(name = "idx_grade_student", columnList = "student_id"),
+        @Index(name = "idx_grade_subject", columnList = "subject")
+    },
+    uniqueConstraints = {
+        @UniqueConstraint(name = "uk_student_subject_date", columnNames = {"student_id", "subject", "date"})
+    }
+)
 public class Grade {
 
     @Id
@@ -40,33 +45,23 @@ public class Grade {
     private Instant updatedAt;
 
     @PrePersist
-    protected void onCreate() {
-        createdAt = Instant.now();
-    }
+    protected void onCreate() { createdAt = Instant.now(); }
 
     @PreUpdate
-    protected void onUpdate() {
-        updatedAt = Instant.now();
-    }
+    protected void onUpdate() { updatedAt = Instant.now(); }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
-
     public User getStudent() { return student; }
     public void setStudent(User student) { this.student = student; }
-
     public String getSubject() { return subject; }
     public void setSubject(String subject) { this.subject = subject; }
-
     public String getGrade() { return grade; }
     public void setGrade(String grade) { this.grade = grade; }
-
     public LocalDate getDate() { return date; }
     public void setDate(LocalDate date) { this.date = date; }
-
     public User getTeacher() { return teacher; }
     public void setTeacher(User teacher) { this.teacher = teacher; }
-
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }

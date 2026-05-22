@@ -51,12 +51,11 @@ export default function Register() {
       return
     }
 
-    setSubmitting(true)
+    setSubmitting(true);
     try {
-      const response = await fetch('http://localhost:8080/api/auth/register', {
+      const response = await fetchWithCsrf('http://localhost:8080/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           email: formData.email,
           password: formData.password,
@@ -64,9 +63,9 @@ export default function Register() {
           lastName: formData.lastName,
           login: formData.login,
           group: formData.group,
-          code: formData.code
-        })
-      })
+          code: formData.code,
+        }),
+      });
 
       if (!response.ok) {
         const errBody = await response.json().catch(() => ({}))

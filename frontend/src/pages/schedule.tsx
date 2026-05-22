@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
+import { fetchWithCsrf } from '../utils/csrf'; // <-- ВАЖНО: импорт утилиты
 
 const API_BASE_URL = 'http://localhost:8080';
 const SCHEDULE_UPLOAD_URL = `${API_BASE_URL}/api/schedule/upload`;
 const SUPPORTED_EXCEL_EXTENSIONS = '.xlsx,.xls,.xlsm,.xlsb';
 
-// ---------- Интерфейсы (из вашего JSON-файла) ----------
+// ---------- Интерфейсы ----------
 interface Cell {
   columnIndex: number;
   columnName: string;
@@ -46,28 +47,32 @@ export default function Schedule() {
     setScheduleData(null);
 
     const formData = new FormData();
-    // Уточните имя поля у бэкенда – обычно 'file'
     formData.append('file', file);
 
     try {
-      const response = await fetch(SCHEDULE_UPLOAD_URL, {
+      // ИСПОЛЬЗУЕМ fetchWithCsrf вместо обычного fetch
+      const response = await fetchWithCsrf(SCHEDULE_UPLOAD_URL, {
         method: 'POST',
-        credentials: 'include',
         body: formData,
       });
 
       if (!response.ok) {
-        if (response.status === 403) throw new Error('Нет прав доступа (требуется роль ADMIN)');
+        if (response.status === 403) {
+          const text = await response.text();
+          throw new Error(
+            text.includes('CSRF') || text.includes('Forbidden')
+              ? 'Ошибка CSRF-токена. Обновите страницу и повторите.'
+              : 'Нет прав доступа (требуется роль ADMIN)'
+          );
+        }
         throw new Error(`Ошибка загрузки: ${response.status}`);
       }
 
       const result = await response.json();
-      // Структура ответа: { message: "...", schedule: { ... } }
       const schedule = result.schedule;
       if (!schedule) {
         throw new Error('Ответ сервера не содержит поле schedule');
       }
-
       setScheduleData(schedule);
       setCurrentSheetIndex(0);
     } catch (err) {
@@ -78,7 +83,7 @@ export default function Schedule() {
     }
   };
 
-  // ---------- Вспомогательные функции для отображения таблицы ----------
+  // ---------- Вспомогательные функции ----------
   const getMaxColumns = (sheet: Sheet): number => {
     let max = 0;
     sheet.rows.forEach(row => {
@@ -106,7 +111,6 @@ export default function Schedule() {
     if (!scheduleData) return null;
     const sheet = scheduleData.sheets[currentSheetIndex];
     if (!sheet) return <p>Нет данных для этого листа</p>;
-
     const matrix = buildMatrix(sheet);
     if (matrix.length === 0) return <p>Таблица пуста</p>;
 
@@ -141,7 +145,6 @@ export default function Schedule() {
   return (
     <div>
       <h2>Расписание занятий</h2>
-
       <input
         type="file"
         ref={fileInputRef}
@@ -149,7 +152,6 @@ export default function Schedule() {
         onChange={handleFileChange}
         accept={SUPPORTED_EXCEL_EXTENSIONS}
       />
-
       <button onClick={() => fileInputRef.current?.click()}>
         Загрузить Excel
       </button>
@@ -172,7 +174,6 @@ export default function Schedule() {
               </option>
             ))}
           </select>
-
           {renderTable()}
         </div>
       )}
