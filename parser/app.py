@@ -9,10 +9,14 @@ from typing import Any
 
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from openpyxl import load_workbook
+
 
 app = FastAPI(title="StudHub Schedule Parser")
 
 ALLOWED_EXTENSIONS = {".xlsx", ".xlsm", ".xlsb", ".xls"}
+OPENPYXL_MERGE_EXTENSIONS = {".xlsx", ".xlsm"}
+
 
 
 def _extract_extension(filename: str) -> str:
@@ -57,7 +61,35 @@ def _slug(text: str) -> str:
     return text
 
 
+def _fill_merged_cells(frame: pd.DataFrame, worksheet: Any | None) -> pd.DataFrame:
+    if worksheet is None or not worksheet.merged_cells.ranges:
+        return frame
+
+    merged_ranges = list(worksheet.merged_cells.ranges)
+    required_rows = max([frame.shape[0], *(cell_range.max_row for cell_range in merged_ranges)])
+    required_columns = max([frame.shape[1], *(cell_range.max_col for cell_range in merged_ranges)])
+    filled = frame.reindex(index=range(required_rows), columns=range(required_columns)).astype(object)
+
+
+    for cell_range in merged_ranges:
+        start_row = cell_range.min_row - 1
+        end_row = cell_range.max_row
+        start_column = cell_range.min_col - 1
+        end_column = cell_range.max_col
+        value = _normalize_value(worksheet.cell(row=cell_range.min_row, column=cell_range.min_col).value)
+
+        if value is None:
+            continue
+
+        for row_idx in range(start_row, end_row):
+            for column_idx in range(start_column, end_column):
+                filled.iat[row_idx, column_idx] = value
+
+    return filled
+
+
 def _records_from_frame(frame: pd.DataFrame) -> list[dict[str, Any]]:
+
     if frame.empty:
         return []
 
@@ -125,15 +157,23 @@ async def parse_schedule(file: UploadFile = File(...)) -> dict[str, Any]:
         tmp.write(raw_content)
         temp_path = tmp.name
 
+    openpyxl_workbook = None
     try:
         workbook = pd.ExcelFile(temp_path, engine=engine)
+        if ext in OPENPYXL_MERGE_EXTENSIONS:
+            openpyxl_workbook = load_workbook(temp_path, read_only=False, data_only=True)
+
         sheets: list[dict[str, Any]] = []
 
         for sheet_name in workbook.sheet_names:
             frame = pd.read_excel(workbook, sheet_name=sheet_name, engine=engine, header=None)
             frame = frame.where(pd.notnull(frame), None)
+            worksheet = openpyxl_workbook[sheet_name] if openpyxl_workbook else None
+            frame = _fill_merged_cells(frame, worksheet)
+            frame = frame.where(pd.notnull(frame), None)
 
             columns_count = int(frame.shape[1]) if not frame.empty else 0
+
             rows_payload = []
             for row_idx, row in frame.iterrows():
                 cells = []
@@ -177,7 +217,10 @@ async def parse_schedule(file: UploadFile = File(...)) -> dict[str, Any]:
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Failed to parse spreadsheet: {exc}") from exc
     finally:
+        if openpyxl_workbook is not None:
+            openpyxl_workbook.close()
         try:
             os.remove(temp_path)
         except OSError:
             pass
+
