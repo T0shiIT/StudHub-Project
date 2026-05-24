@@ -103,8 +103,15 @@ public class AuthController {
         // Уведомляем C++ сервис (если ему нужны эти данные для своей логики)
         Map<String, String> payload = Map.of(
             "user_id", String.valueOf(newUser.getId()),
-            "email", email, "login", login, "role", newUser.getRole()
+            "email", email,
+            "login", login,
+            "password_hash", newUser.getPasswordHash(),
+            "first_name", newUser.getFirstName(),
+            "last_name", newUser.getLastName(),
+            "group_name", newUser.getGroupName(),
+            "role", newUser.getRole()
         );
+
         cppUserClient.syncOAuth(payload); // Используем sync как апдейт
 
         Map<String, Object> responseBody = buildProfile(newUser);
@@ -123,14 +130,20 @@ public class AuthController {
         vt.setExpiresAt(Instant.now().plus(verificationTtlHours, ChronoUnit.HOURS));
         tokenRepository.save(vt);
 
+        boolean verificationSent = true;
         try {
             mailService.sendVerification(email, login, vt.getToken());
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", "Не удалось отправить письмо"));
+            verificationSent = false;
+            log.warn("Failed to send verification email to {}. Registration is kept active.", email, e);
         }
 
-        responseBody.put("verificationSent", true);
+        responseBody.put("verificationSent", verificationSent);
+        if (!verificationSent) {
+            responseBody.put("warning", "Пользователь создан, но письмо подтверждения не отправлено. Проверьте SMTP-настройки.");
+        }
         return ResponseEntity.status(HttpStatus.CREATED).body(responseBody);
+
     }
 
     @GetMapping("/confirm")
