@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { fetchWithCsrf } from '../utils/csrf'
+
 
 export default function Register() {
   const navigate = useNavigate()

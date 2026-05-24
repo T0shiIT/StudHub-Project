@@ -46,15 +46,17 @@ public class ScheduleController {
         }
 
         User currentUser = resolveCurrentUser(authentication).orElse(null);
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Пользователь не найден"));
+        }
+
         // В методе uploadSchedule, после получения currentUser:
         System.out.println("====== DEBUG SCHEDULE UPLOAD ======");
         System.out.println("Email из сессии: " + authentication.getName());
         System.out.println("Email из БД: " + currentUser.getEmail());
         System.out.println("Роль из БД (длина " + currentUser.getRole().length() + "): [" + currentUser.getRole() + "]");
         System.out.println("===================================");
-        if (currentUser == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "Пользователь не найден"));
-        }
+
         if (!ADMIN_ROLE.equalsIgnoreCase(currentUser.getRole())) {
             return ResponseEntity.status(403).body(Map.of("error", "Нет прав доступа: требуется роль ADMIN"));
         }
@@ -74,10 +76,14 @@ public class ScheduleController {
         String scheduleJson;
         try {
             scheduleJson = scheduleParserClient.parseToJson(file);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Ошибка парсинга файла: " + e.getMessage()));
         } catch (IllegalStateException e) {
             return ResponseEntity.internalServerError()
                     .body(Map.of("error", "Ошибка парсинга файла: " + e.getMessage()));
         }
+
 
         Object scheduleData;
         try {

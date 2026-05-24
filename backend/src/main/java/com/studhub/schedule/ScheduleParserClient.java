@@ -8,7 +8,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
+
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -50,12 +52,33 @@ public class ScheduleParserClient {
             return objectMapper.readTree(response.getBody()).toString();
         } catch (IOException e) {
             throw new IllegalStateException("Unable to read uploaded file", e);
+        } catch (RestClientResponseException e) {
+            throw new IllegalArgumentException(extractParserError(e.getResponseBodyAsString()), e);
         } catch (RestClientException e) {
             throw new IllegalStateException("Parser service is unavailable", e);
         }
     }
 
+    private String extractParserError(String responseBody) {
+        if (responseBody == null || responseBody.isBlank()) {
+            return "Parser service rejected uploaded file";
+        }
+        try {
+            var root = objectMapper.readTree(responseBody);
+            if (root.hasNonNull("detail")) {
+                return root.get("detail").asText();
+            }
+            if (root.hasNonNull("error")) {
+                return root.get("error").asText();
+            }
+        } catch (IOException ignored) {
+            return responseBody;
+        }
+        return responseBody;
+    }
+
     private ByteArrayResource asResource(MultipartFile file) throws IOException {
+
         return new ByteArrayResource(file.getBytes()) {
             @Override
             public String getFilename() {
