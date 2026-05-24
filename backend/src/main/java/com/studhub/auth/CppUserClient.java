@@ -61,6 +61,31 @@ public class CppUserClient {
         }
     }
 
+    public Result getUserProfile(Long userId) {
+        try {
+            ResponseEntity<String> response = restClient.get()
+                    .uri("/api/cpp/profile/" + userId)
+                    .header(USER_ID_HEADER, String.valueOf(userId))
+                    .retrieve()
+                    .onStatus(status -> true, (req, res) -> {})
+                    .toEntity(String.class);
+
+            HttpStatus status = HttpStatus.valueOf(response.getStatusCode().value());
+            Map<?, ?> body = parseBody(response.getBody());
+
+            return new Result(status, body);
+
+        } catch (Exception e) {
+            log.error("Failed to load user profile from C++ service", e);
+
+            return new Result(
+                    HttpStatus.BAD_GATEWAY,
+                    Map.of("error", "C++ сервис недоступен: " + e.getMessage())
+            );
+        }
+    }
+
+
     /**
 
      * @param userId идентификатор пользователя

@@ -72,6 +72,22 @@ public class TestController {
         return ResponseEntity.ok(Map.of("message", "Role updated"));
     }
 
+    @GetMapping("/api/cpp-profile")
+    public ResponseEntity<?> cppProfile(
+            @RequestHeader("X-User-Id") Long userId,
+            Authentication authentication
+    ) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(401).body("Unauthorized");
+        }
+
+        CppUserClient.Result result = cppUserClient.getUserProfile(userId);
+
+        return ResponseEntity
+                .status(result.status())
+                .body(result.body());
+    }
+
     private Map<String, Object> toProfile(User u) {
         Map<String, Object> result = new HashMap<>();
         result.put("id", u.getId());

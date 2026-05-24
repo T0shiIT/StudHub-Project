@@ -1,4 +1,4 @@
--- USERS
+-- НЕ ТРОГАТЬ БД 
 CREATE TABLE IF NOT EXISTS app_users (
     user_id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -23,6 +23,14 @@ CREATE TABLE IF NOT EXISTS grades (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_student_subject_date UNIQUE (student_id, subject, date)
+);
+
+CREATE TABLE user_profile (
+    profile_id SERIAL PRIMARY KEY,
+    user_id INTEGER UNIQUE NOT NULL REFERENCES app_users(user_id) ON DELETE CASCADE,
+    bio TEXT,
+    avatar_url VARCHAR(255) DEFAULT 'https://photos.app.goo.gl/3rVQBMCJnd1PWWQ99',
+    birthday DATE
 );
 
 CREATE TABLE IF NOT EXISTS schedule_uploads (
