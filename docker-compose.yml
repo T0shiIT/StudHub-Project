@@ -18,7 +18,7 @@ services:
       retries: 5
 
   cpp:
-    build: ./cpp  # <-- ИСПРАВЛЕНО: было ./database
+    build: ./database  # <-- ИСПРАВЛЕНО: было ./database
     restart: unless-stopped
     depends_on:
       db:
