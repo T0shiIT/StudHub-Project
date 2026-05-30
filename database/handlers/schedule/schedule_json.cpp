@@ -14,6 +14,42 @@ extern std::string DB_CONN;
 
 namespace {
     constexpr const char* SCHEDULE_FILES_DIR = "/app/uploads/schedules";
+    constexpr const char* UPSERT_SCHEDULE_SQL = R"sql(
+WITH updated AS (
+    UPDATE schedule_uploads
+    SET file_name = $1,
+        file_type = $2,
+        schedule_json = $3::jsonb,
+        uploaded_by = $4,
+        created_at = CURRENT_TIMESTAMP
+    WHERE id = (
+        SELECT id
+        FROM schedule_uploads
+        WHERE file_name = $1
+           OR (schedule_json - 'fileName') = (($3::jsonb) - 'fileName')
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+    )
+    RETURNING id, created_at, TRUE AS replaced
+),
+inserted AS (
+    INSERT INTO schedule_uploads (file_name, file_type, schedule_json, uploaded_by)
+    SELECT $1, $2, $3::jsonb, $4
+    WHERE NOT EXISTS (SELECT 1 FROM updated)
+    RETURNING id, created_at, FALSE AS replaced
+)
+SELECT id, created_at, replaced FROM updated
+UNION ALL
+SELECT id, created_at, replaced FROM inserted
+)sql";
+    constexpr const char* DELETE_DUPLICATE_SCHEDULES_SQL = R"sql(
+DELETE FROM schedule_uploads
+WHERE id <> $1
+  AND (
+      file_name = $2
+      OR (schedule_json - 'fileName') = (($3::jsonb) - 'fileName')
+  )
+)sql";
 
     crow::response json_response(int code, const json& body) {
         crow::response res(code, body.dump());
@@ -88,20 +124,28 @@ void register_schedule_json_handlers(crow::SimpleApp& app) {
             pqxx::work W(*conn);
             // DDL (CREATE TABLE / ALTER TABLE) удален. Таблица должна существовать в БД.
             
-            pqxx::result inserted = W.exec_params(
-                "INSERT INTO schedule_uploads (file_name, file_type, schedule_json, uploaded_by) "
-                "VALUES ($1, $2, $3::jsonb, $4) RETURNING id, created_at",
+            pqxx::result saved = W.exec_params(
+                UPSERT_SCHEDULE_SQL,
                 fileName, fileType, scheduleJson, uploadedBy
             );
+            long savedId = saved[0]["id"].as<long>();
+            std::string createdAt = saved[0]["created_at"].c_str();
+            bool replaced = saved[0]["replaced"].as<bool>();
+
+            W.exec_params(
+                DELETE_DUPLICATE_SCHEDULES_SQL,
+                savedId, fileName, scheduleJson
+            );
             W.commit();
-            
+
             std::string savedJsonFile = save_schedule_json_file(fileName, scheduleJson);
 
             json res;
             res["status"] = "ok";
-            res["id"] = inserted[0]["id"].as<long>();
+            res["id"] = savedId;
             res["fileName"] = fileName;
-            res["createdAt"] = inserted[0]["created_at"].c_str();
+            res["createdAt"] = createdAt;
+            res["replaced"] = replaced;
             res["jsonFile"] = savedJsonFile;
             return json_response(200, res);
         } catch (const std::exception& e) {
