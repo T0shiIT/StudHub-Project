@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS app_users (
     last_name VARCHAR(255),
     group_name VARCHAR(255),
     is_blocked BOOLEAN DEFAULT FALSE,
-    role VARCHAR(255) DEFAULT 'STUDENT',
+    role INTEGER DEFAULT '1', --изменения ролей на 1 2 3
     password_hash TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

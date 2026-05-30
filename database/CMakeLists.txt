@@ -29,6 +29,7 @@ include_directories(
     handlers/get_data
     handlers/schedule
     handlers/tests
+    /handlers/roles
     /usr/local/include
     ${LIBPQ_INCLUDE_DIRS}
     ${PQXX_INCLUDE_DIRS}
@@ -44,6 +45,7 @@ add_executable(core
     handlers/get_data/get_data.cpp
     handlers/schedule/schedule_json.cpp
     handlers/tests/user_set_role.cpp
+    handlers/roles/roles.h
 )
 
 target_link_libraries(core

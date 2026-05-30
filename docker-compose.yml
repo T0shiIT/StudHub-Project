@@ -38,8 +38,8 @@ services:
   backend:
     build: ./backend
     restart: unless-stopped
-    expose:
-      - "8080"
+    ports:
+      - "8080:8080"
     depends_on:
       db:
         condition: service_healthy # Ждем только БД, она точно имеет pg_isready
@@ -70,7 +70,7 @@ services:
     build: ./frontend
     restart: unless-stopped
     ports:
-      - "5173:5173"
+      - "5173"
     depends_on:
       - backend  # Просто ждем старта контейнера, без condition: service_healthy
 
