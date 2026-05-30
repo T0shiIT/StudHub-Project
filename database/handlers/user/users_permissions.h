@@ -4,8 +4,6 @@
 #include <memory>
 #include <stdexcept>
 
-#include "../roles/roles.h"
-
 namespace user_permissions {
     namespace Perm {
         const std::string COURSE_JOIN     = "course:join";
@@ -65,27 +63,10 @@ namespace user_permissions {
         }
     };
 
-    inline std::unique_ptr<User> create_user(Role role) {
-        switch(role) {
-            case Role::STUDENT:
-                return std::make_unique<Student>();
-
-            case Role::TEACHER:
-                return std::make_unique<Teacher>();
-
-            case Role::ADMIN:
-                return std::make_unique<Admin>();
-
-            default:
-                throw std::invalid_argument("Unknown role");
-        }
+    inline std::unique_ptr<User> create_user(const std::string& role) {
+        if (role == "ADMIN")   return std::make_unique<Admin>();
+        if (role == "TEACHER") return std::make_unique<Teacher>();
+        if (role == "STUDENT") return std::make_unique<Student>();
+        throw std::invalid_argument("Unknown role: " + role);
     }
-
-    //временный коммент
-    // inline std::unique_ptr<User> create_user(Role role) {
-    //     if (role == "ADMIN")   return std::make_unique<Admin>();
-    //     if (role == "TEACHER") return std::make_unique<Teacher>();
-    //     if (role == "STUDENT") return std::make_unique<Student>();
-    //     throw std::invalid_argument("Unknown role: " + role);
-    // }
 }

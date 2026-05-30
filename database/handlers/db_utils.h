@@ -6,7 +6,6 @@
 #include <mutex>
 #include <condition_variable>
 #include <exception>
-
 #include "users_permissions.h"
 
 extern std::string DB_CONN;
@@ -99,8 +98,7 @@ inline std::unique_ptr<user_permissions::User> load_user(int user_id) {
     if (r.empty()) return nullptr;
 
     auto row = r[0];
-    int role_value = row["role"].as<int>();
-    Role role = static_cast<Role>(role_value);
+    std::string role = row["role"].as<std::string>();
     bool blocked = row["is_blocked"].as<bool>();
 
     auto user = user_permissions::create_user(role);
