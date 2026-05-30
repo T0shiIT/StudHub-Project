@@ -50,6 +50,7 @@ services:
     volumes:
       - ./uploads/schedules:/app/uploads/schedules:ro
     environment:
+      APP_REGISTER_BYPASS_CODE: admin
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/studhub
       SPRING_DATASOURCE_USERNAME: user
       SPRING_DATASOURCE_PASSWORD: pass

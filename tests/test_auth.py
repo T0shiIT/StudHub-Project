@@ -1,77 +1,93 @@
-# import requests
-# import pytest
-# import uuid
+import requests
+import pytest
+import uuid
+ 
+BASE_URL = "http://localhost:8080"
+ 
+ 
+@pytest.fixture
+def session():
+    return requests.Session()
+ 
+ 
+def test_unique_user(session):
+    uid = str(uuid.uuid4())[:8]
+ 
+    # 1. Регистрация
+    user_data = {
+        "email":     f"test_{uid}@gmail.com",
+        "firstName": "User1",
+        "lastName":  "LastName1",
+        "login":     f"user_{uid}",
+        "group":     "ПИ-2025",
+        "password":  "1234567890",
+        "code":      "admin"          # bypass-код
+    }
+ 
+    print(f"\n[1] Регистрация: {user_data['email']}")
+    reg_res = session.post(f"{BASE_URL}/api/auth/register", json=user_data, timeout=30)
+    print(f"    status : {reg_res.status_code}")
+    print(f"    body   : {reg_res.text}")
+    assert reg_res.status_code == 201, f"Регистрация упала: {reg_res.text}"
+ 
+    reg_json = reg_res.json()
+    user_id  = reg_json["id"]
+    role     = reg_json.get("role")
+    print(f"    user_id={user_id}  role={role}")
+ 
+    # bypass-код должен дать ADMIN сразу
+    assert role == "ADMIN", f"Ожидали ADMIN, получили {role}"
+ 
+    # 2. Логин
+    print(f"\n[2] Логин: {user_data['email']}")
+    login_res = session.post(
+        f"{BASE_URL}/api/auth/login",
+        json={"email": user_data["email"], "password": user_data["password"]},
+        timeout=10
+    )
+    print(f"    status : {login_res.status_code}")
+    print(f"    body   : {login_res.text}")
+    assert login_res.status_code == 200, f"Логин упал: {login_res.text}"
+ 
+    # 3. Профиль текущего пользователя
+    print(f"\n[3] Профиль /api/user")
+    profile_res = session.get(f"{BASE_URL}/api/user", timeout=10)
+    print(f"    status : {profile_res.status_code}")
+    print(f"    body   : {profile_res.text}")
+    assert profile_res.status_code == 200, f"/api/user вернул {profile_res.status_code}: {profile_res.text}"
 
-# BASE_URL_JAVA = "http://localhost:8082"
+    profile = profile_res.json()
+    print(f"    profile: {profile}")
+    assert profile.get("email") == user_data["email"]
+    assert profile.get("role")  == "ADMIN"
 
-# @pytest.fixture
-# def session():
-#     """Создание чистой сессии для каждого теста"""
-#     return requests.Session()
+    # CSRF токен из куки (Spring кладёт его после первого GET)
+    csrf_token = session.cookies.get("XSRF-TOKEN")
+    print(f"\n    CSRF token: {csrf_token}")
 
-# def test_unique_user(session):
-#     #данные для регистрации
-#     uid = str(uuid.uuid4())[:8]
-#     user_data = { 
-#         "email": f"test_{uid}@gmail.com",
-#         "firstName": "User1",
-#         "lastName": "LastName1",
-#         "login": f"user_{uid}",
-#         "group": "ПИ-2025",
-#         "password": "1234567890",
-#         "code": "admin"
-#     }
+    # 4. Смена роли (сам себе, раз уже ADMIN)
+    print(f"\n[4] Смена роли → STUDENT")
+    role_res = session.post(
+        f"{BASE_URL}/api/user/change-role",
+        json={"target_user_id": str(user_id), "role": "STUDENT"},
+        headers={"X-XSRF-TOKEN": csrf_token},   #csrf токен
+        timeout=10
+    )
+    print(f"    status : {role_res.status_code}")
+    print(f"    body   : {role_res.text}")
+    assert role_res.status_code == 200, f"change-role упал: {role_res.text}"
 
-#     print(f"\n[START] Регистрируем пользователя в Java: {BASE_URL_JAVA}")
-#     try:
-#         reg_res = session.post(f"{BASE_URL_JAVA}/api/auth/register", json=user_data, timeout=15)
-#         print(f"[DEBUG] Java Status: {reg_res.status_code}")
-#         assert reg_res.status_code == 201
-#         user_id = reg_res.json()["id"]
-#     except requests.exceptions.ConnectionError as e:
-#         pytest.fail(f"Java-сервер недоступен! Ошибка: {e}")
+    # 5. Проверяем что роль обновилась
+    print(f"\n[5] Проверка роли после смены")
+    profile2_res = session.get(f"{BASE_URL}/api/user", timeout=10)
+    print(f"    status : {profile2_res.status_code}")
+    print(f"    body   : {profile2_res.text}")
+    assert profile2_res.status_code == 200
+ 
+    profile2 = profile2_res.json()
+    print(f"    profile: {profile2}")
+    assert profile2.get("role") == "STUDENT", \
+        f"Роль не изменилась: {profile2.get('role')}"
+ 
+    print("\n[OK] Все шаги прошли успешно")
 
-#     print(f"\n[LOGIN] Логинимся под созданным пользователем")
-#     login_data = {
-#         "email": user_data["email"],
-#         "password": user_data["password"]
-#     }
-#     login_res = session.post(f"{BASE_URL_JAVA}/api/auth/login", json=login_data, timeout=5)
-#     assert login_res.status_code == 200, f"Login failed: {login_res.text}"
-
-#     # Передаем X-User-Id
-#     headers = {
-#         "X-User-Id": str(user_id),
-#         "Content-Type": "application/json"
-#     }
-
-#     print("\n[CHECK] Проверяем исходный профиль")
-#     cpp_profile_res = session.get(f"{BASE_URL_JAVA}/api/cpp-profile", headers=headers)
-#     print(f"cpp profile response: {cpp_profile_res.text}")
-#     assert cpp_profile_res.status_code == 200
-#     print(f"Текущий профиль: {cpp_profile_res.json()}")
-
-#     print("\n[ACTION] Меняем роль через Java-бэкенд...")
-#     role_payload = {
-#         "target_user_id": str(user_id),
-#         "role": "ADMIN"
-#     }
-
-#     role_change_res = session.post(
-#         f"{BASE_URL_JAVA}/api/user/change-role",
-#         json=role_payload
-#     )
-
-#     print(f"[DEBUG] Java Change Role Status: {role_change_res.status_code}")
-#     print(f"[DEBUG] Java Change Role Response: {role_change_res.text}")
-    
-#     assert role_change_res.status_code == 200
-
-#     print("\n[VERIFY] Проверяем, изменилась ли роль в БД")
-#     cpp_res_final = session.get(f"{BASE_URL_JAVA}/api/cpp-profile", headers=headers)
-#     assert cpp_res_final.status_code == 200
-    
-#     data = cpp_res_final.json()
-#     print(f"Финальный профиль: {data}")
-    
-#     print("\n[SUCCESS] Роль успешно обновлена")
