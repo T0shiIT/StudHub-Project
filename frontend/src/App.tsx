@@ -9,6 +9,7 @@ import Schedule from './pages/schedule'
 import Grades from './pages/grades'
 import Announcements from './pages/announcements'
 import Profile from './pages/profile'
+import ChatPage from "./pages/chat";
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
             <Route path="grades" element={<Grades />} />
             <Route path="announcements" element={<Announcements />} />
             <Route path="profile" element={<Profile />} />
+            <Route path="/chat" element={<ChatPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

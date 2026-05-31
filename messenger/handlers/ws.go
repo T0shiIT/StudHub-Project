@@ -52,7 +52,8 @@ func WSHandler(h *hub.Hub) http.HandlerFunc {
 			http.Error(w, "invalid token", http.StatusUnauthorized)
 			return
 		}
-
+		log.Printf("[WS CONNECT] room=%s user=%d login=%s",
+			roomID, userID, login)
 		//Проверяем что юзер не заблокирован через Java (опционально, по userID)
 		// Для скорости пропускаем блокировку проверяем при выдаче chat-token на стороне Java
 		_ = login

@@ -1,15 +1,23 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
     port: 5173,
-    allowedHosts: [
-      'localhost',
-      '.loca.lt'  // Разрешаем все домены localtunnel
-    ]
+    allowedHosts: ['localhost', '.loca.lt'],
+    proxy: {
+      '/api': {
+        target: 'http://backend:8080',
+        changeOrigin: true,
+        rewrite: (path) => path,
+      },
+      '/ws': {
+        target: 'ws://messenger:9000',
+        ws: true,
+        changeOrigin: true,
+      }
+    }
   }
 })
