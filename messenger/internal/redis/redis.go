@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"messenger/internal/room"
 	"os"
 	"time"
@@ -31,15 +32,35 @@ func Init() {
 func Client() *redis.Client { return rdb }
 
 // SaveMessage кладёт сообщение в список room:{id}:messages (LPUSH + LTRIM).
+//
+//	func SaveMessage(ctx context.Context, msg room.Message) error {
+//		key := fmt.Sprintf("room:%s:messages", msg.RoomID)
+//		data, err := json.Marshal(msg)
+//		if err != nil {
+//			return err
+//		}
+//		pipe := rdb.Pipeline()
+//		pipe.LPush(ctx, key, data)
+//		pipe.LTrim(ctx, key, 0, int64(maxMessagesPerRoom-1))
+//		_, err = pipe.Exec(ctx)
+//		return err
+//	}
 func SaveMessage(ctx context.Context, msg room.Message) error {
+	log.Printf("[REDIS SAVE] room=%s text=%s",
+		msg.RoomID,
+		msg.Text)
+
 	key := fmt.Sprintf("room:%s:messages", msg.RoomID)
+
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
+
 	pipe := rdb.Pipeline()
 	pipe.LPush(ctx, key, data)
 	pipe.LTrim(ctx, key, 0, int64(maxMessagesPerRoom-1))
+
 	_, err = pipe.Exec(ctx)
 	return err
 }

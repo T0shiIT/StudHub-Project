@@ -71,6 +71,9 @@ func WSHandler(h *hub.Hub) http.HandlerFunc {
 		if err != nil {
 			log.Printf("[ws] history error: %v", err)
 		} else {
+			log.Printf("[ws] sending %d history messages to user %d in room %s",
+				len(history), userID, roomID)
+
 			sendHistory(conn, history)
 		}
 

@@ -1,8 +1,10 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"log"
+	redisstore "messenger/internal/redis"
 	"messenger/internal/room"
 	"sync"
 	"time"
@@ -85,13 +87,25 @@ func (c *Client) readPump() {
 			continue
 		}
 
-		c.room.Broadcast(room.Message{
+		msg := room.Message{
 			RoomID:   c.room.ID,
 			SenderID: c.userID,
 			Login:    c.login,
 			Text:     inc.Text,
 			SentAt:   time.Now().UnixMilli(),
-		})
+		}
+
+		log.Printf("[MESSAGE] room=%s text=%s", msg.RoomID, msg.Text)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+
+		if err := redisstore.SaveMessage(ctx, msg); err != nil {
+			log.Printf("[REDIS ERROR] %v", err)
+		}
+
+		cancel()
+
+		c.room.Broadcast(msg)
 	}
 }
 
