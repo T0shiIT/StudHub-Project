@@ -73,6 +73,9 @@ services:
       MAIL_SSL: ${MAIL_SSL:-true}
       BACKEND_URL: http://localhost:8080
       FRONTEND_URL: http://localhost:5173
+
+      # Секрет для верификации JWT в Go — должен совпасть с CHAT_JWT_SECRET
+      CHAT_JWT_SECRET: ${CHAT_JWT_SECRET:-changeme-shared-secret}
   frontend:
     build: ./frontend
     restart: unless-stopped
@@ -93,5 +96,52 @@ services:
       - ./frontend/dist:/usr/share/nginx/html:ro
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
 
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  messenger:
+    build: ./messenger
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    environment:
+      REDIS_ADDR: redis:6379
+      JAVA_BACKEND_URL: http://backend:8080
+      CHAT_JWT_SECRET: ${CHAT_JWT_SECRET:-changeme-shared-secret}
+      CHAT_PORT: "9000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
 volumes:
   db_data:
+
+
+#   Проблема: Spring Boot 3.2 + Spring Security — эндпоинт GET /api/internal/chat-token возвращает 404, хотя контроллер скомпилирован и присутствует в JAR (InternalUserController.class есть в BOOT-INF/classes/com/studhub/).
+# Симптомы:
+
+# GET /api/internal/chat-token → 404 с пустым телом
+# Класс есть в JAR: docker exec ... unzip -l app.jar | grep InternalUser показывает файл
+# В логах Spring нет маппинга на /api/internal/**
+# При запросе без сессии Spring Security редиректит на Яндекс OAuth (это ожидаемо)
+# При запросе с валидным JSESSIONID — всё равно 404
+
+# Стек: Spring Boot 3.2.0, Spring Security, OAuth2 (Яндекс), PostgreSQL, Docker
+# Конфиг Security разрешает .requestMatchers("/api/internal/**").authenticated()
+# Вопрос: Почему Spring не регистрирует маппинги контроллера несмотря на то что класс скомпилирован и находится в правильном пакете com.studhub? Как это диагностировать и исправить?

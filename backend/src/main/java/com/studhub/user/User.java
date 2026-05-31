@@ -40,6 +40,14 @@ public class User {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+
+
+    @Column(name = "is_blocked")
+    private Boolean isBlocked = false;
+
+    public Boolean getIsBlocked() { return isBlocked; }
+    public void setIsBlocked(Boolean isBlocked) { this.isBlocked = isBlocked; }
+
     @PrePersist
     void onCreate() {
         this.createdAt = Instant.now();
