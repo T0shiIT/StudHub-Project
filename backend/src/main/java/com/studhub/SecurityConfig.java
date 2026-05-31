@@ -29,18 +29,14 @@ public class SecurityConfig {
                                            SecurityContextRepository securityContextRepository,
                                            OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler) throws Exception {
 
-        // Отключаем отложенную генерацию CSRF, чтобы cookie XSRF-TOKEN
-        // устанавливалась сразу при первом GET-запросе.
         CsrfTokenRequestAttributeHandler csrfHandler = new CsrfTokenRequestAttributeHandler();
         csrfHandler.setCsrfRequestAttributeName(null);
 
         http
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf
-                        // Cookie доступна для JavaScript (HttpOnly = false)
                         .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                         .csrfTokenRequestHandler(csrfHandler)
-                        // Публичные эндпоинты без CSRF (пользователь еще не аутентифицирован)
                         .ignoringRequestMatchers("/api/auth/**", "/api/test", "/api/csrf", "/error")
                 )
                 .securityContext(sc -> sc.securityContextRepository(securityContextRepository))
@@ -49,13 +45,14 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/schedule/upload").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/user/change-role").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/grades/**").hasAnyRole("TEACHER", "ADMIN")
+                        // НОВОЕ: разрешить создание оценки (POST /api/grades) только TEACHER и ADMIN
+                        .requestMatchers(HttpMethod.POST, "/api/grades").hasAnyRole("TEACHER", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/grades/upload").hasAnyRole("TEACHER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/grades/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/schedule/download/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/schedule/uploads", "/api/schedule/uploads/**").authenticated()
                         .requestMatchers("/api/user", "/api/cpp-profile", "/api/schedule/latest").authenticated()
                         .anyRequest().authenticated()
-
                 )
                 .oauth2Login(oauth2 -> oauth2.successHandler(oAuth2LoginSuccessHandler))
                 .logout(logout -> logout
@@ -67,8 +64,15 @@ public class SecurityConfig {
         return http.build();
     }
 
-    @Bean public PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
-    @Bean public SecurityContextRepository securityContextRepository() { return new HttpSessionSecurityContextRepository(); }
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public SecurityContextRepository securityContextRepository() {
+        return new HttpSessionSecurityContextRepository();
+    }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
@@ -76,7 +80,7 @@ public class SecurityConfig {
         cfg.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost"));
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));
-        cfg.setAllowCredentials(true); // Обязательно для передачи cookie
+        cfg.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", cfg);
         return source;
