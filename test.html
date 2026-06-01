@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<body>
+<button onclick="connect()">Connect</button>
+<button onclick="send()">Send message</button>
+<div id="log"></div>
+<script>
+let ws;
+function log(msg) {
+    document.getElementById('log').innerHTML += '<p>' + msg + '</p>';
+}
+function connect() {
+    ws = new WebSocket("ws://localhost:9000/ws/test-room?token=test");
+    ws.onopen = () => log("✅ CONNECTED");
+    ws.onclose = (e) => log("❌ CLOSED: " + e.code + " " + e.reason);
+    ws.onerror = () => log("⚠️ ERROR");
+    ws.onmessage = (m) => log("📨 MSG: " + m.data);
+}
+function send() {
+    ws.send(JSON.stringify({text: "Привет!"}));
+    log("📤 Sent: Привет!");
+}
+</script>
+</body>
+</html>

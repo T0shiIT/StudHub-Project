@@ -67,13 +67,26 @@ public class CppUserClient {
      * @param newRole новая роль (например, "admin")
      */
     public Result changeUserRole(Long userId, String newRole) {
-        Map<String, Object> payload = Map.of(
-                "user_id", userId,
-                "role", newRole
-        );
-        return call("/api/cpp/change-role", payload);
-    }
+        Map<String, Object> payload = Map.of("role", newRole);  // только role в теле
+        try {
+            ResponseEntity<String> response = restClient.post()
+                    .uri("/api/cpp/test_handler/change_role")   // правильный роут
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header("X-User-Id", String.valueOf(userId)) // userId в заголовке
+                    .body(payload)
+                    .retrieve()
+                    .onStatus(status -> true, (req, res) -> { })
+                    .toEntity(String.class);
 
+            HttpStatus status = HttpStatus.valueOf(response.getStatusCode().value());
+            Map<?, ?> body = parseBody(response.getBody());
+            return new Result(status, body);
+        } catch (Exception e) {
+            log.error("changeUserRole failed for userId={}", userId, e);
+            return new Result(HttpStatus.INTERNAL_SERVER_ERROR,
+                    Map.of("error", "Внутренняя ошибка: " + e.getMessage()));
+        }
+    }
     private Result call(String uri, Map<String, ?> payload) {
         return call(uri, payload, null);
     }
