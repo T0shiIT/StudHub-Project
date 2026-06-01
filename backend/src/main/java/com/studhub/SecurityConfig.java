@@ -53,6 +53,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/schedule/uploads", "/api/schedule/uploads/**").authenticated()
                         .requestMatchers("/api/user", "/api/cpp-profile", "/api/schedule/latest").authenticated()
                         .anyRequest().authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/posts").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/posts").authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2.successHandler(oAuth2LoginSuccessHandler))
                 .logout(logout -> logout
