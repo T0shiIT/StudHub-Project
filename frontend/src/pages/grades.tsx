@@ -1,75 +1,153 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { fetchWithCsrf } from '../utils/csrf';
 import type { JournalData, UserRole } from '../types/journal';
 
-//моковые данные заглушка покешта
-const MOCK_JOURNAL: JournalData = {
-  students: [
-    { id: 1, firstName: 'игорь', lastName: 'петров' },
-    { id: 2, firstName: 'татьяна', lastName: 'сидорова' },
-    { id: 3, firstName: 'григорий', lastName: 'козлов' },
-  ],
-  dates: ['2026-05-05', '2026-05-07', '2026-05-12', '2026-05-14'],
-  grades: {
-    1: { '2026-05-05': 5, '2026-05-07': 4, '2026-05-12': null, '2026-05-14': 3 },
-    2: { '2026-05-05': 4, '2026-05-07': 5, '2026-05-12': 2, '2026-05-14': 4 },
-    3: { '2026-05-05': null, '2026-05-07': 3, '2026-05-12': 5, '2026-05-14': 5 },
-  },
+const API_BASE_URL = 'http://localhost:8080';
+const GRADES_URL = `${API_BASE_URL}/api/grades`;
+const GRADES_UPLOAD_URL = `${API_BASE_URL}/api/grades/upload`;
+
+const getGradeColor = (grade: number | null): string => {
+  if (grade === 5 || grade === 4) return '#fce7f3'; // pink-100
+  if (grade === 3) return '#fbcfe8'; // pink-200
+  if (grade === 2) return '#f9a8d4'; // pink-300
+  return '#f3e8ff'; // purple-100
 };
 
-const getGradeColor = (grade: number | null) => {
-  if (grade === 5 || grade === 4) return '#49b36e'; 
-  if (grade === 3) return '#fff478';                
-  if (grade === 2) return '#ff3d3d';                
-  return '#9e9e9e';                                
+const getGradeTextColor = (grade: number | null): string => {
+  if (grade === 5 || grade === 4) return '#be185d'; // pink-700
+  if (grade === 3) return '#9d174d'; // pink-800
+  if (grade === 2) return '#831843'; // pink-900
+  return '#6b21a8'; // purple-800
 };
 
 export default function Grades() {
   const { user, isAuthenticated } = useAuth();
-  const role: UserRole = (user?.role as UserRole) || 'ADMIN'; // fallback, но обычно приходит из сервера
-
+  const role: UserRole = (user?.role as UserRole) || 'STUDENT';
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [journal, setJournal] = useState<JournalData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error] = useState('');
-
-  const [editingCell, setEditingCell] = useState<{ studentId: number; date: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [uploadMsg, setUploadMsg] = useState('');
+  const [editingCell, setEditingCell] = useState<{ studentId: number; date: string; gradeId?: number } | null>(null);
   const [tempGrade, setTempGrade] = useState('');
   const [savingCell, setSavingCell] = useState<{ studentId: number; date: string } | null>(null);
 
-  const [uploading, setUploading] = useState(false);
-  const [uploadMsg, setUploadMsg] = useState('');
-
-  // загрузка журналам при открытии стр
   useEffect(() => {
-    // имитация GET-запроса: /api/journal?subject_id=...
-    const timer = setTimeout(() => {
-      setJournal(MOCK_JOURNAL);
-      setLoading(false);
-    }, 800); 
+    if (!isAuthenticated) return;
 
-    return () => clearTimeout(timer); 
-  }, []);
+    const fetchJournal = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        
+        const params = new URLSearchParams();
+        if ((role === 'TEACHER' || role === 'ADMIN') && user?.groupName) {
+          params.set('group', user.groupName);
+        }
 
-  const startEditing = (studentId: number, date: string, currentGrade: number | null) => {
-    if (role !== 'TEACHER') return;   // <-- только TEACHER может редактировать
-    setEditingCell({ studentId, date });
+        const res = await fetchWithCsrf(`${GRADES_URL}?${params.toString()}`);
+        
+        if (!res.ok) {
+          const errorData: { error?: string } = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Не удалось загрузить журнал');
+        }
+
+        const data: Array<{
+          id: number;
+          studentId: number;
+          studentFullName: string;
+          subject: string;
+          grade: string;
+          date: string;
+          teacherId?: number;
+          teacherFullName?: string;
+        }> = await res.json();
+
+        const studentsMap = new Map<number, { id: number; firstName: string; lastName: string }>();
+        const datesSet = new Set<string>();
+        const gradesMap: { [studentId: number]: { [date: string]: number | null } } = {};
+
+        data.forEach((g) => {
+          if (!studentsMap.has(g.studentId)) {
+            const parts = g.studentFullName.trim().split(' ');
+            const lastName = parts[0] || '';
+            const firstName = parts.slice(1).join(' ') || '';
+            studentsMap.set(g.studentId, { id: g.studentId, firstName, lastName });
+            gradesMap[g.studentId] = {};
+          }
+          if (g.date) datesSet.add(g.date);
+          gradesMap[g.studentId][g.date] = g.grade ? Number(g.grade) : null;
+        });
+
+        setJournal({
+          students: Array.from(studentsMap.values()),
+          dates: Array.from(datesSet).sort(),
+          grades: gradesMap,
+        });
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'Ошибка при загрузке данных';
+        setError(errorMessage);
+        console.error('Grades fetch error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchJournal();
+  }, [isAuthenticated, role, user?.groupName]);
+
+  const startEditing = (studentId: number, date: string, currentGrade: number | null, gradeId?: number) => {
+    if (role !== 'TEACHER') return;
+    setEditingCell({ studentId, date, gradeId });
     setTempGrade(currentGrade !== null ? String(currentGrade) : '');
   };
 
   const saveGrade = async (studentId: number, date: string) => {
+    if (!editingCell) return;
+    
     const newGrade = parseInt(tempGrade, 10);
     if (isNaN(newGrade) || newGrade < 2 || newGrade > 5) {
       alert('Разрешены только оценки от 2 до 5');
       return;
     }
 
-    setSavingCell({ studentId, date });  
-
+    setSavingCell({ studentId, date });
     try {
-      // имитация PATCH-запроса: /api/journal/grade
-      await new Promise((res, rej) => setTimeout(Math.random() > 0.2 ? res : rej, 600));
+      const { gradeId } = editingCell;
 
-      setJournal((prev) => {
+      if (gradeId) {
+        const res = await fetchWithCsrf(`${GRADES_URL}/${gradeId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ grade: String(newGrade) }),
+        });
+        
+        if (!res.ok) {
+          const errorData: { error?: string } = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Не удалось обновить оценку');
+        }
+      } else {
+        const res = await fetchWithCsrf(GRADES_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            studentId,
+            subject: 'Основной предмет',
+            grade: String(newGrade),
+            date,
+          }),
+        });
+        
+        if (!res.ok) {
+          const errorData: { error?: string } = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Не удалось создать оценку');
+        }
+      }
+
+      setJournal((prev: JournalData | null) => {
         if (!prev) return prev;
         return {
           ...prev,
@@ -79,149 +157,225 @@ export default function Grades() {
           },
         };
       });
-      setEditingCell(null); 
-    } catch {
-      alert('Не удалось сохранить оценку. Проверьте соединение.');
+      setEditingCell(null);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Ошибка сохранения';
+      alert(errorMessage);
     } finally {
-      setSavingCell(null); 
+      setSavingCell(null);
     }
   };
 
-  // кнопка выгрузки эксель таблички для админа
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploading(true);
     setUploadMsg('');
-
     try {
-      // имитация POST-запроса: /api/journal/upload
-      await new Promise((res) => setTimeout(res, 1000));
-      setUploadMsg('Успешно загружено');
-    } catch {
-      setUploadMsg('Ошибка загрузки или неверный формат файла');
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetchWithCsrf(GRADES_UPLOAD_URL, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result: { processed?: number; failed?: number; error?: string } = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(result.error || 'Ошибка загрузки');
+      }
+
+      setUploadMsg(`Успешно: ${result.processed}, Ошибок: ${result.failed}`);
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Ошибка загрузки файла';
+      setUploadMsg(errorMessage);
     } finally {
       setUploading(false);
     }
     e.target.value = '';
   };
 
-  if (!isAuthenticated) return <p style={{ textAlign: 'center', marginTop: '40px' }}>Войдите в систему для просмотра оценок.</p>;
-  if (loading) return <p style={{ textAlign: 'center', marginTop: '40px' }}> Загрузка журнала...</p>;
-  if (error) return <p style={{ textAlign: 'center', marginTop: '40px', color: '#ef4444' }}>{error}</p>;
-  if (!journal) return <p style={{ textAlign: 'center', marginTop: '40px' }}>Данные не найдены.</p>;
+  if (!isAuthenticated) {
+    return (
+      <div className="schedule-empty-state">
+        <div className="schedule-empty-state__icon">🔐</div>
+        <h3>Требуется авторизация</h3>
+        <p>Войдите в систему для просмотра оценок.</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="schedule-alert schedule-alert--loading">
+        Загрузка журнала оценок...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="schedule-alert schedule-alert--error">
+        {error}
+      </div>
+    );
+  }
+
+  if (!journal || journal.students.length === 0) {
+    return (
+      <div className="schedule-empty-state">
+        <div className="schedule-empty-state__icon">📊</div>
+        <h3>Журнал пуст</h3>
+        <p>Данные не найдены или журнал ещё не заполнен.</p>
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <h2>Журнал оценок</h2>
-      {role === 'ADMIN' && (   // <-- ADMIN
-        <div style={{ marginBottom: '24px', padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #3b82f6' }}>
-          <h3 style={{ marginBottom: '12px' }}>Загрузка данных из Excel</h3>
-          <input
-            type="file"
-            accept=".xlsx"
-            onChange={handleFileUpload}
-            disabled={uploading}
-            style={{ display: 'none' }}
-            id="excel-upload"
-          />
-          <label
-            htmlFor="excel-upload"
-            style={{
-              cursor: uploading ? 'not-allowed' : 'pointer',
-              color: '#3b82f6',
-              fontWeight: 600,
-              textDecoration: 'underline',
-              userSelect: 'none',
-            }}
-          >
-            {uploading ? '⏳ Отправка...' : '📎 Выбрать файл'}
-          </label>
-          {uploadMsg && (
-            <p style={{ marginTop: '8px', color: uploadMsg.startsWith('') ? '#10b981' : '#ef4444' }}>
-              {uploadMsg}
-            </p>
+    <div className="schedule-page">
+      {/* Hero Section */}
+      <section className="schedule-hero">
+        <div>
+          <span className="schedule-eyebrow">Успеваемость</span>
+          <h2>Журнал оценок</h2>
+          <p>Просматривайте и редактируйте оценки студентов.</p>
+        </div>
+        <div className="schedule-hero-actions">
+          {role === 'ADMIN' && (
+            <button
+              className="schedule-upload-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+            >
+              {uploading ? 'Загрузка...' : 'Загрузить Excel'}
+            </button>
           )}
+        </div>
+      </section>
+
+      <input
+        type="file"
+        ref={fileInputRef}
+        className="schedule-file-input"
+        onChange={handleFileUpload}
+        accept=".xlsx,.xls"
+      />
+
+      {uploading && (
+        <div className="schedule-alert schedule-alert--loading">
+          Загрузка и обработка файла...
         </div>
       )}
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '20px', background: 'white', borderRadius: '8px', overflow: 'hidden' }}>
-        <thead>
-          <tr style={{ background: '#1e293b', color: 'white' }}>
-            <th style={{ padding: '12px', textAlign: 'left' }}>Студент</th>
-            {journal.dates.map((date) => (
-              <th key={date} style={{ padding: '12px', textAlign: 'center' }}>
-                {new Date(date).toLocaleDateString('ru-RU')}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {journal.students.map((student) => (
-            <tr key={student.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-              <td style={{ padding: '12px', fontWeight: 500 }}>
-                {student.lastName} {student.firstName}
-              </td>
-              {journal.dates.map((date) => {
-                const grade = journal.grades[student.id]?.[date] ?? null;
-                const isEditing = editingCell?.studentId === student.id && editingCell.date === date;
-                const isSaving = savingCell?.studentId === student.id && savingCell.date === date;
+      {uploadMsg && (
+        <div className={`schedule-alert ${uploadMsg.startsWith('Успешно') ? 'schedule-alert--success' : 'schedule-alert--error'}`}>
+          {uploadMsg}
+        </div>
+      )}
 
-                return (
-                  <td
-                    key={date}
-                    style={{
-                      padding: 0,
-                      textAlign: 'center',
-                      background: getGradeColor(grade),
-                      cursor: role === 'TEACHER' ? 'pointer' : 'default',  // <-- TEACHER
-                      transition: 'background 0.2s',
-                    }}
-                    onClick={() => !isEditing && role === 'TEACHER' && startEditing(student.id, date, grade)}
-                  >
-                    {isSaving ? (
-                      <span style={{ color: '#6b7280', fontSize: '14px' }}>...</span>
-                    ) : isEditing ? (
-                      <input
-                        type="number"
-                        min="2"
-                        max="5"
-                        value={tempGrade}
-                        onChange={(e) => setTempGrade(e.target.value)}
-                        onBlur={() => saveGrade(student.id, date)}
-                        onKeyDown={(e) => e.key === 'Enter' && saveGrade(student.id, date)}
-                        autoFocus
-                        style={{
-                          width: '100%',
-                          height: '48px',
-                          border: 'none',
-                          background: 'transparent',
-                          textAlign: 'center',
-                          outline: '2px solid #3b82f6',
-                          fontSize: '16px',
-                          fontWeight: 600,
-                        }}
-                      />
-                    ) : (
-                      <span style={{ padding: '12px', display: 'block', fontWeight: 600, color: '#334155' }}>
-                        {grade !== null ? grade : '—'}
-                      </span>
-                    )}
+      {/* Main Content */}
+      <section className="schedule-card">
+        <div className="schedule-toolbar">
+          <div className="schedule-file-info">
+            <span>Журнал</span>
+            <strong>Основной предмет</strong>
+            <small>{journal.students.length} студентов • {journal.dates.length} дат</small>
+          </div>
+          <div className="schedule-controls">
+            <span className="schedule-role-badge">
+              Роль: <strong>{role === 'STUDENT' ? 'Студент' : role === 'TEACHER' ? 'Преподаватель' : 'Администратор'}</strong>
+            </span>
+          </div>
+        </div>
+
+        <div className="grades-table-container">
+          <table className="grades-table">
+            <thead>
+              <tr className="grades-table__header-row">
+                <th className="grades-table__header grades-table__student-column">
+                  <div>
+                    <span className="grades-table__header-eyebrow">Список</span>
+                    <h3>Студент</h3>
+                  </div>
+                </th>
+                {journal.dates.map((date) => (
+                  <th key={date} className="grades-table__header">
+                    <div>
+                      <span className="grades-table__header-eyebrow">Дата</span>
+                      <h4>{new Date(date).toLocaleDateString('ru-RU')}</h4>
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {journal.students.map((student) => (
+                <tr key={student.id} className="grades-table__row">
+                  <td className="grades-table__cell grades-table__student-cell">
+                    <div>
+                      <strong>{student.lastName} {student.firstName}</strong>
+                      <small>ID: {student.id}</small>
+                    </div>
                   </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                  {journal.dates.map((date) => {
+                    const grade = journal.grades[student.id]?.[date] ?? null;
+                    const isEditing = editingCell?.studentId === student.id && editingCell.date === date;
+                    const isSaving = savingCell?.studentId === student.id && savingCell.date === date;
 
-      <p style={{ marginTop: '20px', color: '#64748b', fontSize: '14px' }}>
-        Ваша роль: <b>{role}</b>.{' '}
-        {role === 'STUDENT' ? 'Режим только для чтения. Редактирование недоступно.' : ''}
-        {role === 'TEACHER' ? 'Кликните по любой ячейке, чтобы поставить оценку (2–5).' : ''}
-        {role === 'ADMIN' ? 'Вам доступна загрузка Excel-файлов для массового импорта.' : ''}
-      </p>
+                    return (
+                      <td
+                        key={date}
+                        className="grades-table__cell grades-table__grade-cell"
+                        style={{
+                          background: getGradeColor(grade),
+                          cursor: role === 'TEACHER' ? 'pointer' : 'default',
+                        }}
+                        onClick={() => !isEditing && role === 'TEACHER' && startEditing(student.id, date, grade)}
+                      >
+                        {isSaving ? (
+                          <span className="grades-table__saving">...</span>
+                        ) : isEditing ? (
+                          <input
+                            type="number"
+                            min="2"
+                            max="5"
+                            value={tempGrade}
+                            onChange={(e) => setTempGrade(e.target.value)}
+                            onBlur={() => saveGrade(student.id, date)}
+                            onKeyDown={(e) => e.key === 'Enter' && saveGrade(student.id, date)}
+                            autoFocus
+                            className="grades-table__input"
+                          />
+                        ) : (
+                          <span 
+                            className="grades-table__grade-value"
+                            style={{ color: getGradeTextColor(grade) }}
+                          >
+                            {grade !== null ? grade : '—'}
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="schedule-empty-state" style={{ marginTop: '24px', background: '#fdf2f8', border: '1px solid #f9a8d4' }}>
+          <div className="schedule-empty-state__icon">💡</div>
+          <h3>Подсказка</h3>
+          <p>
+            {role === 'STUDENT' && 'Режим только для чтения. Редактирование недоступно.'}
+            {role === 'TEACHER' && 'Кликните по любой ячейке, чтобы поставить оценку (2–5).'}
+            {role === 'ADMIN' && 'Вам доступна загрузка Excel-файлов для массового импорта оценок.'}
+          </p>
+        </div>
+      </section>
     </div>
-  );
+      );
 }
