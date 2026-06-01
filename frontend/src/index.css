@@ -1099,3 +1099,143 @@ body {
   width: 20px;
   height: 20px;
 }
+
+/* Grades Table Styles (Pink Theme) */
+.grades-table-container {
+  overflow-x: auto;
+  margin-top: 24px;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(236, 72, 153, 0.1);
+}
+
+.grades-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+.grades-table__header-row {
+  background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%);
+}
+
+.grades-table__header {
+  padding: 16px;
+  text-align: center;
+  border-bottom: 2px solid #f9a8d4;
+  background: rgba(251, 207, 232, 0.3);
+}
+
+.grades-table__header-eyebrow {
+  display: block;
+  font-size: 0.75rem;
+  color: #be185d;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.grades-table__header h3,
+.grades-table__header h4 {
+  margin: 0;
+  color: #831843;
+  font-weight: 600;
+}
+
+.grades-table__student-column {
+  text-align: left;
+  min-width: 200px;
+}
+
+.grades-table__row {
+  transition: background-color 0.2s;
+}
+
+.grades-table__row:hover {
+  background: #fdf2f8;
+}
+
+.grades-table__cell {
+  padding: 12px;
+  border-bottom: 1px solid #fce7f3;
+  text-align: center;
+}
+
+.grades-table__student-cell {
+  text-align: left;
+  background: #fff1f2;
+}
+
+.grades-table__student-cell strong {
+  display: block;
+  color: #be185d;
+  font-size: 0.95rem;
+}
+
+.grades-table__student-cell small {
+  color: #db2777;
+  font-size: 0.8rem;
+}
+
+.grades-table__grade-cell {
+  position: relative;
+  transition: all 0.2s;
+}
+
+.grades-table__grade-cell:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.2);
+}
+
+.grades-table__grade-value {
+  display: block;
+  font-weight: 700;
+  font-size: 1.1rem;
+  padding: 8px;
+}
+
+.grades-table__input {
+  width: 100%;
+  height: 48px;
+  border: 2px solid #ec4899;
+  border-radius: 6px;
+  background: white;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 600;
+  outline: none;
+}
+
+.grades-table__input:focus {
+  border-color: #be185d;
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.2);
+}
+
+.grades-table__saving {
+  color: #db2777;
+  font-size: 0.875rem;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.grades-table__role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #fce7f3, #fbcfe8);
+  border-radius: 20px;
+  font-size: 0.875rem;
+  color: #be185d;
+}
+
+.grades-table__role-badge strong {
+  color: #831843;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
