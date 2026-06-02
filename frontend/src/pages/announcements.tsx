@@ -250,7 +250,7 @@ export default function Announcements() {
                 {/* Блок с кнопкой удаления и временем */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
                   {/* Показываем кнопку удаления ТОЛЬКО если ID автора совпадает с ID текущего пользователя */}
-                  {post.author.id === user?.id && (
+                  {(post.author.id === user?.id || user?.role === 'ADMIN') && (
                     <button
                       onClick={() => handleDelete(post.id)}
                       title="Удалить объявление"

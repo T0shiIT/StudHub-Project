@@ -133,6 +133,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/grades/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/schedule/download/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/schedule/uploads", "/api/schedule/uploads/**").authenticated()
+                        .requestMatchers("/api/announcements/**").authenticated()
                         .requestMatchers("/api/user", "/api/cpp-profile", "/api/schedule/latest").authenticated()
                         .anyRequest().authenticated()
                 )
