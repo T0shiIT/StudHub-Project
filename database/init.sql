@@ -43,3 +43,28 @@ CREATE TABLE IF NOT EXISTS email_verification_tokens (
     used_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS courses (
+    course_id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    teacher_id INTEGER NOT NULL REFERENCES app_users(user_id),
+    cover_image TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    is_deleted BOOLEAN DEFAULT FALSE
+);
+
+CREATE TABLE IF NOT EXISTS enrollments (
+    enrollment_id SERIAL PRIMARY KEY,
+
+    course_id INTEGER NOT NULL
+        REFERENCES courses(course_id)
+        ON DELETE CASCADE,
+
+    user_id INTEGER NOT NULL
+        REFERENCES app_users(user_id)
+        ON DELETE CASCADE,
+
+    UNIQUE(course_id, user_id)
+);

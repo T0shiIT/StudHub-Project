@@ -134,7 +134,26 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/schedule/download/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/schedule/uploads", "/api/schedule/uploads/**").authenticated()
                         .requestMatchers("/api/announcements/**").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/courses/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/courses/*/enroll").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/courses").hasAnyRole("TEACHER", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/user/{id}").authenticated()
                         .requestMatchers("/api/user", "/api/cpp-profile", "/api/schedule/latest").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/courses/**").hasAnyRole("TEACHER", "ADMIN")
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/courses/**"
+                        ).authenticated()
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/courses/*/enroll"
+                        ).authenticated()
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/courses"
+                        ).hasAnyRole("TEACHER", "ADMIN")
                         .anyRequest().authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2.successHandler(oAuth2LoginSuccessHandler))

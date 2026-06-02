@@ -10,6 +10,9 @@ import Grades from './pages/grades'
 import Announcements from './pages/announcements'
 import Profile from './pages/profile'
 import ChatPage from "./pages/chat";
+import CoursesPage from './pages/courses'
+import CourseDetailPage from './pages/course-detail'
+import CourseEditPage from './pages/course-edit';
 
 function App() {
   return (
@@ -29,6 +32,9 @@ function App() {
             <Route path="announcements" element={<Announcements />} />
             <Route path="profile" element={<Profile />} />
             <Route path="/chat" element={<ChatPage />} />
+            <Route path="/courses" element={<CoursesPage />} />
+            <Route path="courses/:id" element={<CourseDetailPage />} />
+            <Route path="courses/:id/edit" element={<CourseEditPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
