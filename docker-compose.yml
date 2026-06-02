@@ -53,6 +53,8 @@ services:
         condition: service_started
       parser:
         condition: service_started
+      redis:                          # <-- ДОБАВЛЕНО
+        condition: service_healthy    # <-- ДОБАВЛЕНО
     volumes:
       - ./uploads/schedules:/app/uploads/schedules:ro
     environment:
@@ -76,6 +78,11 @@ services:
 
       # Секрет для верификации JWT в Go — должен совпасть с CHAT_JWT_SECRET
       CHAT_JWT_SECRET: ${CHAT_JWT_SECRET:-changeme-shared-secret}
+      
+      # Redis configuration            # <-- ДОБАВЛЕНО
+      SPRING_DATA_REDIS_HOST: redis   # <-- ДОБАВЛЕНО
+      SPRING_DATA_REDIS_PORT: 6379    # <-- ДОБАВЛЕНО
+
   frontend:
     build: ./frontend
     restart: unless-stopped
