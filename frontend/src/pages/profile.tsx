@@ -1,8 +1,10 @@
 import { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 export default function Profile() {
+  const navigate = useNavigate();
   const { user, loading, isAuthenticated } = useAuth();
 
   // Новые локальные состояния
@@ -173,6 +175,32 @@ export default function Profile() {
           }}
         >
           Сохранить изменения
+        </button>
+      </div>
+
+      {/* Кнопка чата - отдельным блоком */}
+      <div style={{
+        marginTop: '24px',
+        display: 'flex',
+        gap: '12px'
+      }}>
+        <button 
+          onClick={() => navigate('/chat')} 
+          style={{ 
+            padding: '12px 24px',
+            background: '#2563eb', 
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '15px',
+            fontWeight: '500',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          Открыть чат
         </button>
       </div>
     </div>
