@@ -3,7 +3,6 @@ package com.studhub.course;
 import org.springframework.http.HttpStatus;
 
 public class CourseException extends RuntimeException {
-
     private final HttpStatus status;
 
     public CourseException(String message, HttpStatus status) {

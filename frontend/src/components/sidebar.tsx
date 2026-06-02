@@ -6,6 +6,9 @@ export default function Sidebar() {
       <NavLink to="/" className={({ isActive }) => isActive ? 'active' : ''}>
         Главная
       </NavLink>
+      <NavLink to="/courses" className={({ isActive }) => isActive ? 'active' : ''}>
+        Курсы
+      </NavLink>
       <NavLink to="/schedule">Расписание</NavLink>
       <NavLink to="/grades">Оценки</NavLink>
       <NavLink to="/announcements">Объявления</NavLink>

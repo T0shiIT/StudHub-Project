@@ -9,7 +9,7 @@ export default defineConfig({
     allowedHosts: ['localhost', '.loca.lt'],
     proxy: {
       '/api': {
-        target: 'http://backend:8080',
+        target: 'http://backend:8080',   // ← обратно на имя сервиса в Docker-сети
         changeOrigin: true,
         rewrite: (path) => path,
       },

@@ -109,7 +109,13 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
     private void saveAuthentication(OAuth2User principal, Authentication authentication, User user,
                                     HttpServletRequest request, HttpServletResponse response) {
         List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().toUpperCase()));
-        Authentication newAuth = new UsernamePasswordAuthenticationToken(principal, authentication.getCredentials(), authorities);
+        
+        // ВАЖНО: в качестве principal устанавливаем email пользователя, а не OAuth2User
+        Authentication newAuth = new UsernamePasswordAuthenticationToken(user.getEmail(), authentication.getCredentials(), authorities);
+        
+        // Сохраняем OAuth2User в details на случай, если он понадобится другим контроллерам
+        ((UsernamePasswordAuthenticationToken) newAuth).setDetails(principal);
+        
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(newAuth);
         SecurityContextHolder.setContext(context);

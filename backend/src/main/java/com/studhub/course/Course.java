@@ -1,9 +1,7 @@
 package com.studhub.course;
 
-import com.studhub.course.assignment.Assignment;
 import com.studhub.user.User;
 import jakarta.persistence.*;
-
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,23 +23,19 @@ public class Course {
     @Column(name = "short_name", length = 100)
     private String shortName;
 
-    @Column(name = "category", length = 200)
+    @Column(length = 200)
     private String category;
 
-    /** Статус курса */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private CourseStatus status = CourseStatus.ACTIVE;
 
-    /** Видимость для студентов */
     @Column(nullable = false)
     private boolean visible = true;
 
-    /** Запись открыта */
     @Column(name = "enrollment_open", nullable = false)
     private boolean enrollmentOpen = true;
 
-    /** Создатель/владелец курса */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)
     private User owner;
@@ -56,10 +50,6 @@ public class Course {
     @OrderBy("enrolledAt DESC")
     private List<CourseEnrollment> enrollments = new ArrayList<>();
 
-    @OneToMany(mappedBy = "course", cascade = CascadeType.ALL, orphanRemoval = true)
-    @OrderBy("sortOrder ASC, createdAt ASC")
-    private List<Assignment> assignments = new ArrayList<>();
-
     @PrePersist
     void onCreate() {
         createdAt = LocalDateTime.now();
@@ -71,9 +61,9 @@ public class Course {
         updatedAt = LocalDateTime.now();
     }
 
-    // ---- getters/setters ----
-
+    // Getters and Setters
     public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
@@ -103,5 +93,5 @@ public class Course {
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 
     public List<CourseEnrollment> getEnrollments() { return enrollments; }
-    public List<Assignment> getAssignments() { return assignments; }
+    public void setEnrollments(List<CourseEnrollment> enrollments) { this.enrollments = enrollments; }
 }

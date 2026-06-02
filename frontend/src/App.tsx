@@ -10,6 +10,10 @@ import Grades from './pages/grades'
 import Announcements from './pages/announcements'
 import Profile from './pages/profile'
 import ChatPage from "./pages/chat";
+import CoursesList from './pages/courses/CoursesList'
+import CourseDetail from './pages/courses/CourseDetail'
+import CourseEdit from './pages/courses/CourseEdit'
+
 
 function App() {
   return (
@@ -23,6 +27,9 @@ function App() {
           
           {/* Защищённые маршруты приложения */}
           <Route path="/" element={<Layout />}>
+            <Route path="courses" element={<CoursesList />} />
+            <Route path="courses/:courseId" element={<CourseDetail />} />
+            <Route path="courses/:courseId/edit" element={<CourseEdit />} />
             <Route index element={<Welcome />} />
             <Route path="schedule" element={<Schedule />} />
             <Route path="grades" element={<Grades />} />

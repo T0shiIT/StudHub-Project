@@ -2,12 +2,12 @@ package com.studhub.course;
 
 import com.studhub.user.User;
 import jakarta.persistence.*;
-
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "course_enrollments",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"course_id", "user_id"}))
+@Table(name = "course_enrollments", uniqueConstraints = {
+    @UniqueConstraint(columnNames = {"course_id", "user_id"})
+})
 public class CourseEnrollment {
 
     @Id
@@ -22,7 +22,6 @@ public class CourseEnrollment {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    /** Роль в курсе: STUDENT, TEACHER, ADMIN */
     @Column(name = "course_role", nullable = false, length = 20)
     private String courseRole = "STUDENT";
 
@@ -30,11 +29,13 @@ public class CourseEnrollment {
     private LocalDateTime enrolledAt;
 
     @PrePersist
-    void onCreate() { enrolledAt = LocalDateTime.now(); }
+    void onCreate() {
+        enrolledAt = LocalDateTime.now();
+    }
 
-    // getters / setters
-
+    // Getters and Setters
     public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
     public Course getCourse() { return course; }
     public void setCourse(Course course) { this.course = course; }
@@ -46,4 +47,5 @@ public class CourseEnrollment {
     public void setCourseRole(String courseRole) { this.courseRole = courseRole; }
 
     public LocalDateTime getEnrolledAt() { return enrolledAt; }
+    public void setEnrolledAt(LocalDateTime enrolledAt) { this.enrolledAt = enrolledAt; }
 }
