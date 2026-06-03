@@ -27,11 +27,19 @@ public class Course {
     @Column(name = "created_at")
     private Instant createdAt;
 
+    // ✅ Новые временные поля (не сохраняются в БД)
+    @Transient
+    private int enrollmentCount;
+
+    @Transient
+    private boolean isEnrolled;
+
     @PrePersist
     public void onCreate() {
         createdAt = Instant.now();
     }
 
+    // Геттеры и сеттеры
     public Long getId() { return id; }
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
@@ -42,4 +50,9 @@ public class Course {
     public String getCoverImage() { return coverImage; }
     public void setCoverImage(String coverImage) { this.coverImage = coverImage; }
     public Instant getCreatedAt() { return createdAt; }
+
+    public int getEnrollmentCount() { return enrollmentCount; }
+    public void setEnrollmentCount(int enrollmentCount) { this.enrollmentCount = enrollmentCount; }
+    public boolean isEnrolled() { return isEnrolled; }
+    public void setEnrolled(boolean enrolled) { isEnrolled = enrolled; }
 }

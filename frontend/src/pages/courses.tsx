@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { fetchWithCsrf } from '../utils/csrf';
 
@@ -9,38 +9,27 @@ interface Course {
   description: string;
   teacherId: number;
   teacherName?: string;
-  studentsCount?: number;
-  enrolled?: boolean;
   coverImage?: string;
+  enrollmentCount?: number;
+  enrolled?: boolean;          // ✅ изменили isEnrolled -> enrolled
 }
-
-// Дефолтные обложки (градиенты + иконки)
-const DEFAULT_COVERS = [
-  'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-  'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-  'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-  'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-  'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-  'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)',
-];
 
 export default function CoursesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [newCourse, setNewCourse] = useState({
     title: '',
     description: '',
     coverImage: '',
   });
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [enrollingId, setEnrollingId] = useState<number | null>(null);
 
-  const canCreate = user?.role === 'TEACHER' || user?.role === 'ADMIN';
-
-  const getTeacherName = async (teacherId: number): Promise<string> => {
+  const fetchTeacherName = async (teacherId: number): Promise<string> => {
     try {
       const res = await fetchWithCsrf(`http://localhost:8080/api/internal/user/${teacherId}`);
       if (res.ok) {
@@ -48,41 +37,40 @@ export default function CoursesPage() {
         return `${data.firstName} ${data.lastName}`;
       }
     } catch (e) {
-      console.error('Failed to load teacher info', e);
+      console.error('Failed to fetch teacher name', e);
     }
     return 'Преподаватель';
   };
 
   const loadCourses = async () => {
+    setLoading(true);
     try {
       const res = await fetchWithCsrf('http://localhost:8080/api/courses');
-      if (res.ok) {
-        const data = await res.json();
+      if (!res.ok) throw new Error('Failed to fetch courses');
+      let coursesData: Course[] = await res.json();
 
-        const coursesWithDetails = await Promise.all(
-          data.map(async (course: Course, idx: number) => {
-            const teacherName = await getTeacherName(course.teacherId);
-
-            const enrollStatusRes = await fetchWithCsrf(
-              `http://localhost:8080/api/courses/${course.id}/enrollment-status`
-            );
-            const enrollData = enrollStatusRes.ok
-              ? await enrollStatusRes.json()
-              : { enrolled: false, studentsCount: 0 };
-
-            return {
-              ...course,
-              teacherName,
-              enrolled: enrollData.enrolled,
-              studentsCount: enrollData.studentsCount || 0,
-            };
+      const needsTeacherName = coursesData.some(c => !c.teacherName);
+      if (needsTeacherName) {
+        const enriched = await Promise.all(
+          coursesData.map(async (course) => {
+            if (!course.teacherName && course.teacherId) {
+              const name = await fetchTeacherName(course.teacherId);
+              return { ...course, teacherName: name };
+            }
+            return course;
           })
         );
-
-        setCourses(coursesWithDetails);
+        coursesData = enriched;
       }
-    } catch (e) {
-      console.error('Failed to load courses', e);
+
+      const finalCourses = coursesData.map(c => ({
+        ...c,
+        enrollmentCount: c.enrollmentCount ?? 0,
+        enrolled: c.enrolled ?? false,
+      }));
+      setCourses(finalCourses);
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -90,154 +78,179 @@ export default function CoursesPage() {
 
   useEffect(() => {
     loadCourses();
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) loadCourses();
+    };
+    window.addEventListener('pageshow', handlePageShow);
+    return () => window.removeEventListener('pageshow', handlePageShow);
   }, []);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  useEffect(() => {
+    const handleFocus = () => loadCourses();
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
 
+  const canCreate = user?.role === 'ADMIN' || user?.role === 'TEACHER';
+
+  const handleCreateCourse = async () => {
     if (!newCourse.title.trim()) {
-      setError('Введите название курса');
+      alert('Введите название курса');
       return;
     }
-
-    setSubmitting(true);
+    setCreating(true);
     try {
       const res = await fetchWithCsrf('http://localhost:8080/api/courses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newCourse),
+        body: JSON.stringify({
+          title: newCourse.title,
+          description: newCourse.description,
+          coverImage: newCourse.coverImage || null,
+        }),
       });
-
-      if (res.ok) {
-        const created = await res.json();
-        setNewCourse({ title: '', description: '', coverImage: '' });
-        setShowForm(false);
-        navigate(`/courses/${created.id}`);
-      } else {
-        const err = await res.json().catch(() => ({}));
-        setError(err.error || 'Не удалось создать курс');
-      }
-    } catch {
-      setError('Ошибка сети');
+      if (!res.ok) throw new Error(await res.text());
+      alert('Курс создан!');
+      setShowCreateModal(false);
+      setNewCourse({ title: '', description: '', coverImage: '' });
+      await loadCourses();
+    } catch (err: any) {
+      alert('Ошибка: ' + err.message);
     } finally {
-      setSubmitting(false);
+      setCreating(false);
     }
   };
 
-  const handleEnroll = async (courseId: number) => {
+  const enrollInCourse = async (courseId: number) => {
+    if (!user) return;
+    setEnrollingId(courseId);
     try {
       const res = await fetchWithCsrf(`http://localhost:8080/api/courses/${courseId}/enroll`, {
         method: 'POST',
       });
 
-      if (res.ok) {
-        await loadCourses();
+      if (res.ok || (res.status === 400 && (await res.clone().text()).includes('Уже записан'))) {
+        setCourses(prev =>
+          prev.map(course =>
+            course.id === courseId
+              ? {
+                  ...course,
+                  enrollmentCount: (course.enrollmentCount || 0) + 1,
+                  enrolled: true,
+                }
+              : course
+          )
+        );
         navigate(`/courses/${courseId}`);
       } else {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Не удалось записаться на курс');
+        const errorText = await res.text();
+        alert('Ошибка записи: ' + errorText);
       }
-    } catch {
-      alert('Ошибка сети');
+    } catch (err: any) {
+      alert('Ошибка записи: ' + err.message);
+    } finally {
+      setEnrollingId(null);
     }
   };
 
-  if (loading) return <div className="courses-page">Загрузка...</div>;
+  if (loading) return <div className="courses-page">Загрузка курсов...</div>;
 
   return (
     <div className="courses-page">
-      <div className="courses-header">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1>Мои курсы</h1>
         {canCreate && (
-          <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
-            {showForm ? 'Отмена' : '+ Создать курс'}
+          <button className="btn-primary" onClick={() => setShowCreateModal(true)}>
+            + Создать курс
           </button>
         )}
       </div>
 
-      {showForm && (
-        <form className="course-form" onSubmit={handleCreate}>
-          <input
-            type="text"
-            placeholder="Название курса"
-            value={newCourse.title}
-            onChange={(e) => setNewCourse({ ...newCourse, title: e.target.value })}
-            disabled={submitting}
-          />
-          <textarea
-            placeholder="Описание курса"
-            value={newCourse.description}
-            onChange={(e) => setNewCourse({ ...newCourse, description: e.target.value })}
-            disabled={submitting}
-          />
-          <input
-            type="url"
-            placeholder="URL обложки (например: https://images.unsplash.com/...)"
-            value={newCourse.coverImage}
-            onChange={(e) => setNewCourse({ ...newCourse, coverImage: e.target.value })}
-            disabled={submitting}
-          />
-          {error && <div className="form-error">{error}</div>}
-          <button type="submit" className="btn-primary" disabled={submitting}>
-            {submitting ? 'Создание...' : 'Создать'}
-          </button>
-        </form>
-      )}
-
       {courses.length === 0 ? (
-        <div className="empty-state">
-          {canCreate
-            ? 'Курсов пока нет. Создайте первый!'
-            : 'Вы пока не записаны ни на один курс.'}
-        </div>
+        <p className="empty">У вас пока нет курсов</p>
       ) : (
         <div className="courses-grid">
-          {courses.map((course) => (
-            <div key={course.id} className="course-card">
-              {/* Обложка */}
-              <div
-                className="course-cover"
-                style={
-                  course.coverImage
-                    ? { backgroundImage: `url(${course.coverImage})` }
-                    : {
-                        background:
-                          DEFAULT_COVERS[course.id % DEFAULT_COVERS.length],
-                      }
-                }
-              >
-                {!course.coverImage && (
-                  <div className="course-cover-placeholder">📚</div>
+          {courses.map((course) => {
+            const showEnrollButton = user && !course.enrolled; // ✅ исправлено
+            const isEnrollingNow = enrollingId === course.id;
+
+            return (
+              <div key={course.id} className="course-card">
+                <Link to={`/courses/${course.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                  {course.coverImage && (
+                    <div
+                      className="course-card-cover"
+                      style={{ backgroundImage: `url(${course.coverImage})` }}
+                    />
+                  )}
+                  <div className="course-card-content">
+                    <h3>{course.title}</h3>
+                    <p>{course.description?.slice(0, 100)}...</p>
+                    <div className="course-meta">
+                      <span className="teacher">👨‍🏫 {course.teacherName || 'Преподаватель'}</span>
+                      <span className="students">👥 {course.enrollmentCount || 0} студентов</span>
+                    </div>
+                  </div>
+                </Link>
+                {showEnrollButton && (
+                  <button
+                    className="btn-enroll"
+                    onClick={() => enrollInCourse(course.id)}
+                    disabled={isEnrollingNow}
+                  >
+                    {isEnrollingNow ? 'Запись...' : 'Записаться'}
+                  </button>
                 )}
               </div>
+            );
+          })}
+        </div>
+      )}
 
-              {/* Содержимое */}
-              <div className="course-body">
-                <h3>{course.title}</h3>
-                <p className="course-teacher">👨‍🏫 {course.teacherName || 'Преподаватель'}</p>
-                <p className="course-students">👥 {course.studentsCount} студентов</p>
-
-                <div className="course-actions">
-                  {course.enrolled ? (
-                    <button
-                      className="btn-outline"
-                      onClick={() => navigate(`/courses/${course.id}`)}
-                    >
-                      Перейти
-                    </button>
-                  ) : (
-                    <button
-                      className="btn-primary full-width"
-                      onClick={() => handleEnroll(course.id)}
-                    >
-                      Записаться
-                    </button>
-                  )}
-                </div>
-              </div>
+      {/* Модальное окно создания курса */}
+      {showCreateModal && (
+        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Создание нового курса</h2>
+            <div className="form-group">
+              <label>Название курса *</label>
+              <input
+                type="text"
+                value={newCourse.title}
+                onChange={(e) => setNewCourse({ ...newCourse, title: e.target.value })}
+                placeholder="Например: Программирование на Java"
+              />
             </div>
-          ))}
+            <div className="form-group">
+              <label>Описание</label>
+              <textarea
+                value={newCourse.description}
+                onChange={(e) => setNewCourse({ ...newCourse, description: e.target.value })}
+                rows={3}
+                placeholder="Краткое описание курса"
+              />
+            </div>
+            <div className="form-group">
+              <label>URL обложки курса (необязательно)</label>
+              <input
+                type="url"
+                value={newCourse.coverImage}
+                onChange={(e) => setNewCourse({ ...newCourse, coverImage: e.target.value })}
+                placeholder="https://example.com/image.jpg"
+              />
+            </div>
+            <div className="form-actions">
+              <button className="btn-secondary" onClick={() => setShowCreateModal(false)}>
+                Отмена
+              </button>
+              <button className="btn-primary" onClick={handleCreateCourse} disabled={creating}>
+                {creating ? 'Создание...' : 'Создать'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

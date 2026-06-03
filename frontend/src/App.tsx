@@ -13,6 +13,8 @@ import ChatPage from "./pages/chat";
 import CoursesPage from './pages/courses'
 import CourseDetailPage from './pages/course-detail'
 import CourseEditPage from './pages/course-edit';
+import MaterialDetailPage from './pages/material-detail';
+import TestPassing from './pages/TestPassing';
 
 function App() {
   return (
@@ -31,10 +33,14 @@ function App() {
             <Route path="grades" element={<Grades />} />
             <Route path="announcements" element={<Announcements />} />
             <Route path="profile" element={<Profile />} />
-            <Route path="/chat" element={<ChatPage />} />
-            <Route path="/courses" element={<CoursesPage />} />
-            <Route path="courses/:id" element={<CourseDetailPage />} />
+            <Route path="chat" element={<ChatPage />} />
+            
+            {/* ВАЖНО: Специфичные маршруты ДО общих */}
             <Route path="courses/:id/edit" element={<CourseEditPage />} />
+            <Route path="courses/:id/materials/:materialId" element={<MaterialDetailPage />} />
+            <Route path="courses/:id" element={<CourseDetailPage />} />
+            <Route path="courses" element={<CoursesPage />} />
+            <Route path="courses/:courseId/materials/:materialId/test" element={<TestPassing />} />
           </Route>
         </Routes>
       </BrowserRouter>

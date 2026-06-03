@@ -28,9 +28,29 @@ public class CourseController {
         this.enrollmentRepository = enrollmentRepository;
     }
 
+    // ИСПРАВЛЕННЫЙ МЕТОД: используем countByCourseId и existsByCourseIdAndUserId
     @GetMapping
-    public List<Course> getCourses() {
-        return courseRepository.findAll();
+    public List<Course> getCourses(Authentication auth) {
+        User currentUser = userRepository.findByEmail(auth.getName()).orElse(null);
+        Long userId = (currentUser != null) ? currentUser.getId() : null;
+
+        List<Course> courses = courseRepository.findAll();
+
+        for (Course course : courses) {
+            // Количество студентов
+            int count = enrollmentRepository.countByCourseId(course.getId());
+            course.setEnrollmentCount(count);
+
+            // Статус записи текущего пользователя
+            if (userId != null) {
+                boolean enrolled = enrollmentRepository.existsByCourseIdAndUserId(course.getId(), userId);
+                course.setEnrolled(enrolled);
+                System.out.println("Course " + course.getId() + " -> enrolled=" + enrolled);
+            } else {
+                course.setEnrolled(false);
+            }
+        }
+        return courses;
     }
 
     @GetMapping("/{id}")
@@ -45,22 +65,14 @@ public class CourseController {
             @RequestBody Course course,
             Authentication auth
     ) {
-        User user = userRepository
-                .findByEmail(auth.getName())
-                .orElseThrow();
+        User user = userRepository.findByEmail(auth.getName()).orElseThrow();
 
-        if (
-                !"TEACHER".equals(user.getRole()) &&
-                !"ADMIN".equals(user.getRole())
-        ) {
+        if (!"TEACHER".equals(user.getRole()) && !"ADMIN".equals(user.getRole())) {
             return ResponseEntity.status(403).build();
         }
 
         course.setTeacherId(user.getId());
-
-        return ResponseEntity.ok(
-                courseRepository.save(course)
-        );
+        return ResponseEntity.ok(courseRepository.save(course));
     }
 
     @PutMapping("/{id}")
@@ -70,10 +82,7 @@ public class CourseController {
             @RequestBody Map<String, String> updates,
             Authentication auth
     ) {
-        User user = userRepository
-                .findByEmail(auth.getName())
-                .orElseThrow();
-
+        User user = userRepository.findByEmail(auth.getName()).orElseThrow();
         Course course = courseRepository.findById(id).orElse(null);
 
         if (course == null) {
@@ -86,8 +95,7 @@ public class CourseController {
         boolean isOwner = course.getTeacherId().equals(user.getId());
 
         if (!isAdmin && !(isTeacher && isOwner)) {
-            return ResponseEntity.status(403)
-                    .body(Map.of("error", "У вас нет прав на редактирование этого курса"));
+            return ResponseEntity.status(403).body(Map.of("error", "У вас нет прав на редактирование этого курса"));
         }
 
         if (updates.containsKey("title") && updates.get("title") != null && !updates.get("title").isBlank()) {
@@ -96,8 +104,6 @@ public class CourseController {
         if (updates.containsKey("description")) {
             course.setDescription(updates.get("description"));
         }
-        
-        // ДОБАВЛЕНО: обновление обложки
         if (updates.containsKey("coverImage")) {
             course.setCoverImage(updates.get("coverImage"));
         }
@@ -111,12 +117,9 @@ public class CourseController {
             @PathVariable Long id,
             Authentication auth
     ) {
-        User user = userRepository
-                .findByEmail(auth.getName())
-                .orElseThrow();
-
+        User user = userRepository.findByEmail(auth.getName()).orElseThrow();
         Course course = courseRepository.findById(id).orElse(null);
-        
+
         if (course == null) {
             return ResponseEntity.notFound().build();
         }
@@ -127,8 +130,7 @@ public class CourseController {
         boolean isOwner = course.getTeacherId().equals(user.getId());
 
         if (!isAdmin && !(isTeacher && isOwner)) {
-            return ResponseEntity.status(403)
-                    .body(Map.of("error", "У вас нет прав на удаление этого курса"));
+            return ResponseEntity.status(403).body(Map.of("error", "У вас нет прав на удаление этого курса"));
         }
 
         enrollmentRepository.deleteByCourseId(id);
@@ -144,13 +146,8 @@ public class CourseController {
     ) {
         User user = userRepository.findByEmail(auth.getName()).orElseThrow();
 
-        boolean enrolled = enrollmentRepository
-                .findByCourseIdAndUserId(id, user.getId())
-                .isPresent();
-
-        long studentsCount = enrollmentRepository
-                .findByCourseId(id)
-                .size();
+        boolean enrolled = enrollmentRepository.existsByCourseIdAndUserId(id, user.getId());
+        int studentsCount = enrollmentRepository.countByCourseId(id);
 
         return ResponseEntity.ok(Map.of(
                 "enrolled", enrolled,
@@ -158,33 +155,36 @@ public class CourseController {
         ));
     }
 
+    // ИСПРАВЛЕННЫЙ МЕТОД ЗАПИСИ – с логами и принудительным flush
     @PostMapping("/{id}/enroll")
+    @Transactional
     public ResponseEntity<?> enroll(
             @PathVariable Long id,
             Authentication auth
     ) {
-        User user = userRepository
-                .findByEmail(auth.getName())
-                .orElseThrow();
+        User user = userRepository.findByEmail(auth.getName()).orElseThrow();
+        Long userId = user.getId();
 
-        boolean exists = enrollmentRepository
-                .findByCourseIdAndUserId(id, user.getId())
-                .isPresent();
+        System.out.println("=== ENROLL REQUEST ===");
+        System.out.println("Course ID: " + id);
+        System.out.println("User ID: " + userId);
+
+        boolean exists = enrollmentRepository.existsByCourseIdAndUserId(id, userId);
+        System.out.println("Already enrolled? " + exists);
 
         if (exists) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", "Уже записан"));
+            return ResponseEntity.badRequest().body(Map.of("error", "Уже записан"));
         }
 
         Enrollment enrollment = new Enrollment();
         enrollment.setCourseId(id);
-        enrollment.setUserId(user.getId());
-
+        enrollment.setUserId(userId);
         enrollmentRepository.save(enrollment);
+        enrollmentRepository.flush(); // принудительно сбрасываем в БД
 
-        return ResponseEntity.ok(
-                Map.of("message", "Записан")
-        );
+        System.out.println("Enrollment saved. New count: " + enrollmentRepository.countByCourseId(id));
+
+        return ResponseEntity.ok(Map.of("message", "Записан"));
     }
 
     @PostMapping("/{id}/unenroll")
@@ -193,21 +193,17 @@ public class CourseController {
             @PathVariable Long id,
             Authentication auth
     ) {
-        User user = userRepository
-                .findByEmail(auth.getName())
-                .orElseThrow();
+        User user = userRepository.findByEmail(auth.getName()).orElseThrow();
 
         Enrollment enrollment = enrollmentRepository
                 .findByCourseIdAndUserId(id, user.getId())
                 .orElse(null);
 
         if (enrollment == null) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", "Вы не записаны на этот курс"));
+            return ResponseEntity.badRequest().body(Map.of("error", "Вы не записаны на этот курс"));
         }
 
         enrollmentRepository.delete(enrollment);
-
         return ResponseEntity.ok(Map.of("message", "Вы отписались от курса"));
     }
 }
