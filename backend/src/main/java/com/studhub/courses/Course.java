@@ -27,7 +27,11 @@ public class Course {
     @Column(name = "created_at")
     private Instant createdAt;
 
-    // ✅ Новые временные поля (не сохраняются в БД)
+    // ✅ Новое поле: статус курса (ACTIVE / INACTIVE)
+    @Column(nullable = false)
+    private String status = "ACTIVE";
+
+    // Временные поля (не сохраняются в БД)
     @Transient
     private int enrollmentCount;
 
@@ -37,6 +41,7 @@ public class Course {
     @PrePersist
     public void onCreate() {
         createdAt = Instant.now();
+        if (status == null) status = "ACTIVE";
     }
 
     // Геттеры и сеттеры
@@ -50,6 +55,8 @@ public class Course {
     public String getCoverImage() { return coverImage; }
     public void setCoverImage(String coverImage) { this.coverImage = coverImage; }
     public Instant getCreatedAt() { return createdAt; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 
     public int getEnrollmentCount() { return enrollmentCount; }
     public void setEnrollmentCount(int enrollmentCount) { this.enrollmentCount = enrollmentCount; }

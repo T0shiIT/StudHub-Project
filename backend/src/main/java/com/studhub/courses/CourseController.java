@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/courses")
@@ -28,20 +29,28 @@ public class CourseController {
         this.enrollmentRepository = enrollmentRepository;
     }
 
-    // ИСПРАВЛЕННЫЙ МЕТОД: используем countByCourseId и existsByCourseIdAndUserId
+    // Получение списка курсов с учётом роли и статуса
     @GetMapping
     public List<Course> getCourses(Authentication auth) {
         User currentUser = userRepository.findByEmail(auth.getName()).orElse(null);
         Long userId = (currentUser != null) ? currentUser.getId() : null;
 
-        List<Course> courses = courseRepository.findAll();
+        List<Course> allCourses = courseRepository.findAll();
+        List<Course> filteredCourses;
 
-        for (Course course : courses) {
-            // Количество студентов
+        // Для студентов показываем только ACTIVE курсы
+        if (currentUser != null && "STUDENT".equals(currentUser.getRole())) {
+            filteredCourses = allCourses.stream()
+                    .filter(c -> "ACTIVE".equals(c.getStatus()))
+                    .collect(Collectors.toList());
+        } else {
+            filteredCourses = allCourses; // TEACHER и ADMIN видят все курсы
+        }
+
+        for (Course course : filteredCourses) {
             int count = enrollmentRepository.countByCourseId(course.getId());
             course.setEnrollmentCount(count);
 
-            // Статус записи текущего пользователя
             if (userId != null) {
                 boolean enrolled = enrollmentRepository.existsByCourseIdAndUserId(course.getId(), userId);
                 course.setEnrolled(enrolled);
@@ -50,16 +59,25 @@ public class CourseController {
                 course.setEnrolled(false);
             }
         }
-        return courses;
+        return filteredCourses;
     }
 
+    // Получение одного курса с проверкой доступа для студентов
     @GetMapping("/{id}")
-    public ResponseEntity<Course> getCourse(@PathVariable Long id) {
-        return courseRepository.findById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<?> getCourse(@PathVariable Long id, Authentication auth) {
+        User user = userRepository.findByEmail(auth.getName()).orElse(null);
+        Course course = courseRepository.findById(id).orElse(null);
+        if (course == null) return ResponseEntity.notFound().build();
+
+        // Студент не может видеть неактивный курс
+        if (user != null && "STUDENT".equals(user.getRole()) && !"ACTIVE".equals(course.getStatus())) {
+            return ResponseEntity.status(403).body(Map.of("error", "Курс недоступен для студентов"));
+        }
+
+        return ResponseEntity.ok(course);
     }
 
+    // Создание курса – статус по умолчанию ACTIVE, можно переопределить через тело запроса
     @PostMapping
     public ResponseEntity<?> createCourse(
             @RequestBody Course course,
@@ -72,9 +90,11 @@ public class CourseController {
         }
 
         course.setTeacherId(user.getId());
+        if (course.getStatus() == null) course.setStatus("ACTIVE");
         return ResponseEntity.ok(courseRepository.save(course));
     }
 
+    // Обновление курса – добавлена возможность менять статус
     @PutMapping("/{id}")
     @Transactional
     public ResponseEntity<?> updateCourse(
@@ -106,6 +126,13 @@ public class CourseController {
         }
         if (updates.containsKey("coverImage")) {
             course.setCoverImage(updates.get("coverImage"));
+        }
+        // Добавляем возможность обновить статус
+        if (updates.containsKey("status")) {
+            String newStatus = updates.get("status");
+            if ("ACTIVE".equals(newStatus) || "INACTIVE".equals(newStatus)) {
+                course.setStatus(newStatus);
+            }
         }
 
         return ResponseEntity.ok(courseRepository.save(course));
@@ -155,19 +182,37 @@ public class CourseController {
         ));
     }
 
-    // ИСПРАВЛЕННЫЙ МЕТОД ЗАПИСИ – с логами и принудительным flush
+    // ========== ИСПРАВЛЕННЫЙ МЕТОД ЗАПИСИ ==========
     @PostMapping("/{id}/enroll")
     @Transactional
     public ResponseEntity<?> enroll(
             @PathVariable Long id,
             Authentication auth
     ) {
-        User user = userRepository.findByEmail(auth.getName()).orElseThrow();
+        String email = auth.getName();
+        if (email == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Не авторизован"));
+        }
+        
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Пользователь не найден в системе"));
+        }
+        
         Long userId = user.getId();
-
         System.out.println("=== ENROLL REQUEST ===");
         System.out.println("Course ID: " + id);
         System.out.println("User ID: " + userId);
+
+        Course course = courseRepository.findById(id).orElse(null);
+        if (course == null) {
+            return ResponseEntity.notFound().build();
+        }
+        
+        // Если студент пытается записаться на неактивный курс – запрещаем
+        if ("STUDENT".equals(user.getRole()) && !"ACTIVE".equals(course.getStatus())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Курс неактивен, запись невозможна"));
+        }
 
         boolean exists = enrollmentRepository.existsByCourseIdAndUserId(id, userId);
         System.out.println("Already enrolled? " + exists);
@@ -180,7 +225,7 @@ public class CourseController {
         enrollment.setCourseId(id);
         enrollment.setUserId(userId);
         enrollmentRepository.save(enrollment);
-        enrollmentRepository.flush(); // принудительно сбрасываем в БД
+        enrollmentRepository.flush();
 
         System.out.println("Enrollment saved. New count: " + enrollmentRepository.countByCourseId(id));
 

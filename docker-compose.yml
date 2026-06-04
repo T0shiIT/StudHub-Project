@@ -57,6 +57,7 @@ services:
         condition: service_healthy    # <-- ДОБАВЛЕНО
     volumes:
       - ./uploads/schedules:/app/uploads/schedules:ro
+      - ./uploads:/app/uploads
     environment:
       APP_REGISTER_BYPASS_CODE: admin
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/studhub

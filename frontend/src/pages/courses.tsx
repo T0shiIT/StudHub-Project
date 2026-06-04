@@ -11,7 +11,8 @@ interface Course {
   teacherName?: string;
   coverImage?: string;
   enrollmentCount?: number;
-  enrolled?: boolean;          // ✅ изменили isEnrolled -> enrolled
+  enrolled?: boolean;
+  status?: string;                 // ACTIVE / INACTIVE
 }
 
 export default function CoursesPage() {
@@ -25,6 +26,7 @@ export default function CoursesPage() {
     title: '',
     description: '',
     coverImage: '',
+    status: 'ACTIVE',            // по умолчанию активный
   });
   const [creating, setCreating] = useState(false);
   const [enrollingId, setEnrollingId] = useState<number | null>(null);
@@ -67,6 +69,7 @@ export default function CoursesPage() {
         ...c,
         enrollmentCount: c.enrollmentCount ?? 0,
         enrolled: c.enrolled ?? false,
+        status: c.status || 'ACTIVE',
       }));
       setCourses(finalCourses);
     } catch (err) {
@@ -110,12 +113,13 @@ export default function CoursesPage() {
           title: newCourse.title,
           description: newCourse.description,
           coverImage: newCourse.coverImage || null,
+          status: newCourse.status,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
       alert('Курс создан!');
       setShowCreateModal(false);
-      setNewCourse({ title: '', description: '', coverImage: '' });
+      setNewCourse({ title: '', description: '', coverImage: '', status: 'ACTIVE' });
       await loadCourses();
     } catch (err: any) {
       alert('Ошибка: ' + err.message);
@@ -174,7 +178,9 @@ export default function CoursesPage() {
       ) : (
         <div className="courses-grid">
           {courses.map((course) => {
-            const showEnrollButton = user && !course.enrolled; // ✅ исправлено
+            const isStudent = user?.role === 'STUDENT';
+            const isInactive = course.status === 'INACTIVE';
+            const showEnrollButton = user && !course.enrolled && !(isStudent && isInactive);
             const isEnrollingNow = enrollingId === course.id;
 
             return (
@@ -192,6 +198,7 @@ export default function CoursesPage() {
                     <div className="course-meta">
                       <span className="teacher">👨‍🏫 {course.teacherName || 'Преподаватель'}</span>
                       <span className="students">👥 {course.enrollmentCount || 0} студентов</span>
+                      {isInactive && <span className="inactive-badge">🔒 Неактивный</span>}
                     </div>
                   </div>
                 </Link>
@@ -210,7 +217,7 @@ export default function CoursesPage() {
         </div>
       )}
 
-      {/* Модальное окно создания курса */}
+      {/* Модальное окно создания курса – добавлен выбор статуса */}
       {showCreateModal && (
         <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -241,6 +248,16 @@ export default function CoursesPage() {
                 onChange={(e) => setNewCourse({ ...newCourse, coverImage: e.target.value })}
                 placeholder="https://example.com/image.jpg"
               />
+            </div>
+            <div className="form-group">
+              <label>Статус курса</label>
+              <select
+                value={newCourse.status}
+                onChange={(e) => setNewCourse({ ...newCourse, status: e.target.value })}
+              >
+                <option value="ACTIVE">Активный (доступен студентам)</option>
+                <option value="INACTIVE">Неактивный (только преподаватели и админ)</option>
+              </select>
             </div>
             <div className="form-actions">
               <button className="btn-secondary" onClick={() => setShowCreateModal(false)}>

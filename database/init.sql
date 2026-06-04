@@ -57,15 +57,8 @@ CREATE TABLE IF NOT EXISTS courses (
 
 CREATE TABLE IF NOT EXISTS enrollments (
     enrollment_id SERIAL PRIMARY KEY,
-
-    course_id INTEGER NOT NULL
-        REFERENCES courses(course_id)
-        ON DELETE CASCADE,
-
-    user_id INTEGER NOT NULL
-        REFERENCES app_users(user_id)
-        ON DELETE CASCADE,
-
+    course_id INTEGER NOT NULL REFERENCES courses(course_id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES app_users(user_id) ON DELETE CASCADE,
     UNIQUE(course_id, user_id)
 );
 
@@ -84,7 +77,7 @@ CREATE TABLE IF NOT EXISTS course_materials (
     section_id INTEGER NOT NULL REFERENCES course_sections(section_id) ON DELETE CASCADE,
     title VARCHAR(255) NOT NULL,
     description TEXT,
-    material_type VARCHAR(50) NOT NULL, -- 'FILE', 'ASSIGNMENT', 'LINK', 'TEXT'
+    material_type VARCHAR(50) NOT NULL, -- 'FILE', 'ASSIGNMENT', 'LINK', 'TEXT', 'TEST'
     file_path TEXT,
     external_url TEXT,
     due_date TIMESTAMP WITH TIME ZONE,
@@ -105,10 +98,11 @@ CREATE TABLE IF NOT EXISTS material_submissions (
 CREATE INDEX idx_materials_section ON course_materials(section_id);
 CREATE INDEX idx_submissions_material_user ON material_submissions(material_id, user_id);
 
+-- Таблицы тестов (исправлены ссылки на course_materials и app_users)
 CREATE TABLE IF NOT EXISTS test_questions (
     id BIGSERIAL PRIMARY KEY,
     text TEXT NOT NULL,
-    material_id BIGINT NOT NULL REFERENCES course_material(id) ON DELETE CASCADE,
+    material_id BIGINT NOT NULL REFERENCES course_materials(material_id) ON DELETE CASCADE,
     correct_option_id BIGINT
 );
 
@@ -122,8 +116,8 @@ ALTER TABLE test_questions ADD CONSTRAINT fk_correct_option FOREIGN KEY (correct
 
 CREATE TABLE IF NOT EXISTS test_attempts (
     id BIGSERIAL PRIMARY KEY,
-    material_id BIGINT NOT NULL REFERENCES course_material(id) ON DELETE CASCADE,
-    user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    material_id BIGINT NOT NULL REFERENCES course_materials(material_id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES app_users(user_id) ON DELETE CASCADE,
     score_percent INT NOT NULL,
     completed_at TIMESTAMP NOT NULL
 );
@@ -134,3 +128,5 @@ CREATE TABLE IF NOT EXISTS student_answers (
     question_id BIGINT NOT NULL REFERENCES test_questions(id) ON DELETE CASCADE,
     selected_option_id BIGINT NOT NULL REFERENCES answer_options(id) ON DELETE CASCADE
 );
+
+ALTER TABLE courses ADD COLUMN status VARCHAR(20) DEFAULT 'ACTIVE' NOT NULL;

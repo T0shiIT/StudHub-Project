@@ -8,7 +8,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.MediaType;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -25,11 +28,23 @@ public class MaterialController {
     private final CourseSectionRepository sectionRepository;
     private final CourseMaterialRepository materialRepository;
     private final MaterialSubmissionRepository submissionRepository;
-    // Репозитории для тестов
     private final TestQuestionRepository testQuestionRepository;
     private final AnswerOptionRepository answerOptionRepository;
     private final TestAttemptRepository testAttemptRepository;
     private final StudentAnswerRepository studentAnswerRepository;
+
+    // Базовая директория для загрузки файлов (поддержка Docker и локального запуска)
+    private static final Path UPLOAD_BASE;
+
+    static {
+        Path appPath = Paths.get("/app");
+        if (Files.exists(appPath) && Files.isDirectory(appPath)) {
+            UPLOAD_BASE = appPath;
+        } else {
+            UPLOAD_BASE = Paths.get(System.getProperty("user.dir"));
+        }
+        System.out.println("MaterialController: UPLOAD_BASE = " + UPLOAD_BASE.toAbsolutePath());
+    }
 
     public MaterialController(
             CourseRepository courseRepository,
@@ -54,27 +69,16 @@ public class MaterialController {
     }
 
     // ========== SECTIONS ==========
-
     @PostMapping("/sections")
-    public ResponseEntity<?> createSection(
-            @RequestBody Map<String, Object> body,
-            Authentication auth
-    ) {
+    public ResponseEntity<?> createSection(@RequestBody Map<String, Object> body, Authentication auth) {
         User user = userRepository.findByEmail(auth.getName()).orElseThrow();
         Long courseId = Long.valueOf(body.get("courseId").toString());
-
         Course course = courseRepository.findById(courseId).orElse(null);
-        if (course == null) return ResponseEntity.notFound().build();
-
-        if (!canEditCourse(user, course)) {
-            return ResponseEntity.status(403).build();
-        }
-
+        if (course == null || !canEditCourse(user, course)) return ResponseEntity.status(403).build();
         CourseSection section = new CourseSection();
         section.setCourseId(courseId);
         section.setTitle(body.get("title").toString());
         section.setPosition(Integer.parseInt(body.getOrDefault("position", "0").toString()));
-
         return ResponseEntity.ok(sectionRepository.save(section));
     }
 
@@ -88,21 +92,16 @@ public class MaterialController {
         User user = userRepository.findByEmail(auth.getName()).orElseThrow();
         CourseSection section = sectionRepository.findById(sectionId).orElse(null);
         if (section == null) return ResponseEntity.notFound().build();
-
         Course course = courseRepository.findById(section.getCourseId()).orElse(null);
-        if (course == null || !canEditCourse(user, course)) {
-            return ResponseEntity.status(403).build();
-        }
+        if (course == null || !canEditCourse(user, course)) return ResponseEntity.status(403).build();
 
         List<CourseMaterial> materials = materialRepository.findBySectionIdOrderByPosition(sectionId);
         for (CourseMaterial material : materials) {
-            // Удаляем submissions
             List<MaterialSubmission> submissions = submissionRepository.findAll()
                     .stream()
                     .filter(s -> s.getMaterialId().equals(material.getId()))
                     .toList();
             submissionRepository.deleteAll(submissions);
-            // Если это тест – удаляем тестовые данные
             if ("TEST".equals(material.getMaterialType())) {
                 List<TestAttempt> attempts = testAttemptRepository.findByMaterialId(material.getId());
                 for (TestAttempt attempt : attempts) {
@@ -118,25 +117,17 @@ public class MaterialController {
             materialRepository.delete(material);
         }
         sectionRepository.delete(section);
-        return ResponseEntity.ok(Map.of("message", "Раздел и все его материалы удалены"));
+        return ResponseEntity.ok(Map.of("message", "Раздел удалён"));
     }
 
     // ========== MATERIALS ==========
-
     @PostMapping("/material")
-    public ResponseEntity<?> createMaterial(
-            @RequestBody CourseMaterial material,
-            Authentication auth
-    ) {
+    public ResponseEntity<?> createMaterial(@RequestBody CourseMaterial material, Authentication auth) {
         User user = userRepository.findByEmail(auth.getName()).orElseThrow();
         CourseSection section = sectionRepository.findById(material.getSectionId()).orElse(null);
         if (section == null) return ResponseEntity.notFound().build();
-
         Course course = courseRepository.findById(section.getCourseId()).orElse(null);
-        if (course == null || !canEditCourse(user, course)) {
-            return ResponseEntity.status(403).build();
-        }
-
+        if (course == null || !canEditCourse(user, course)) return ResponseEntity.status(403).build();
         return ResponseEntity.ok(materialRepository.save(material));
     }
 
@@ -152,184 +143,269 @@ public class MaterialController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ========== ИСПРАВЛЕННЫЙ deleteMaterial (полное удаление тестов) ==========
+    // ========== DOWNLOAD FILE ==========
+    @GetMapping("/download/{materialId}")
+    public ResponseEntity<?> downloadFile(@PathVariable Long materialId, Authentication auth) {
+        CourseMaterial material = materialRepository.findById(materialId).orElse(null);
+        if (material == null || material.getFilePath() == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Path filePath = Paths.get(material.getFilePath());
+        if (!Files.exists(filePath)) {
+            Path altPath = UPLOAD_BASE.resolve("uploads").resolve("courses").resolve("materials")
+                    .resolve(filePath.getFileName());
+            if (Files.exists(altPath)) {
+                filePath = altPath;
+            } else {
+                System.err.println("File not found: " + material.getFilePath() + " | alt: " + altPath);
+                return ResponseEntity.status(404).body(Map.of("error", "Файл не найден"));
+            }
+        }
+
+        try {
+            byte[] fileBytes = Files.readAllBytes(filePath);
+            String fileName = filePath.getFileName().toString();
+            String encodedFileName = URLEncoder.encode(fileName, StandardCharsets.UTF_8)
+                    .replaceAll("\\+", "%20");
+            return ResponseEntity.ok()
+                    .header("Content-Disposition", "attachment; filename*=UTF-8''" + encodedFileName)
+                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                    .body(fileBytes);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(Map.of("error", "Ошибка чтения файла"));
+        }
+    }
+
+    // ========== UPDATE MATERIAL METADATA ==========
+    @PutMapping("/{materialId}")
+    public ResponseEntity<?> updateMaterial(@PathVariable Long materialId, @RequestBody CourseMaterial updatedMaterial, Authentication auth) {
+        User user = userRepository.findByEmail(auth.getName()).orElseThrow();
+        CourseMaterial existing = materialRepository.findById(materialId).orElse(null);
+        if (existing == null) return ResponseEntity.notFound().build();
+        CourseSection section = sectionRepository.findById(existing.getSectionId()).orElse(null);
+        if (section == null) return ResponseEntity.notFound().build();
+        Course course = courseRepository.findById(section.getCourseId()).orElse(null);
+        if (course == null || !canEditCourse(user, course)) return ResponseEntity.status(403).build();
+
+        existing.setTitle(updatedMaterial.getTitle());
+        existing.setDescription(updatedMaterial.getDescription());
+        existing.setDueDate(updatedMaterial.getDueDate());
+        existing.setExternalUrl(updatedMaterial.getExternalUrl());
+        materialRepository.save(existing);
+        return ResponseEntity.ok(existing);
+    }
+
+    // ========== REPLACE FILE ==========
+    @PostMapping("/{materialId}/replace-file")
+    public ResponseEntity<?> replaceMaterialFile(
+            @PathVariable Long materialId,
+            @RequestParam("file") MultipartFile file,
+            Authentication auth) throws Exception {
+        User user = userRepository.findByEmail(auth.getName()).orElseThrow();
+        CourseMaterial material = materialRepository.findById(materialId).orElse(null);
+        if (material == null) return ResponseEntity.notFound().build();
+        CourseSection section = sectionRepository.findById(material.getSectionId()).orElse(null);
+        if (section == null) return ResponseEntity.notFound().build();
+        Course course = courseRepository.findById(section.getCourseId()).orElse(null);
+        if (course == null || !canEditCourse(user, course)) return ResponseEntity.status(403).build();
+
+        String type = material.getMaterialType();
+        if (!"FILE".equals(type) && !"ASSIGNMENT".equals(type))
+            return ResponseEntity.badRequest().body(Map.of("error", "Только для файлов и заданий"));
+
+        Path uploadDir = UPLOAD_BASE.resolve("uploads").resolve("courses").resolve("materials");
+        Files.createDirectories(uploadDir);
+        String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
+        Path target = uploadDir.resolve(fileName);
+        file.transferTo(target);
+        System.out.println("File saved: " + target.toAbsolutePath());
+
+        if (material.getFilePath() != null) {
+            try {
+                Path oldPath = Paths.get(material.getFilePath());
+                if (!oldPath.isAbsolute()) oldPath = UPLOAD_BASE.resolve(oldPath);
+                if (Files.exists(oldPath)) Files.delete(oldPath);
+            } catch (Exception ignored) {}
+        }
+
+        String relativePath = "uploads/courses/materials/" + fileName;
+        material.setFilePath(relativePath);
+        materialRepository.save(material);
+        return ResponseEntity.ok(Map.of("status", "success", "filePath", relativePath, "message", "Файл заменён"));
+    }
+
+    // ========== UPDATE TEST QUESTIONS ==========
+    @PutMapping("/{materialId}/questions")
+    public ResponseEntity<?> updateTestQuestions(
+            @PathVariable Long materialId,
+            @RequestBody List<Map<String, Object>> questionsData,
+            Authentication auth) {
+        User user = userRepository.findByEmail(auth.getName()).orElseThrow();
+        CourseMaterial material = materialRepository.findById(materialId).orElse(null);
+        if (material == null) return ResponseEntity.notFound().build();
+        CourseSection section = sectionRepository.findById(material.getSectionId()).orElse(null);
+        Course course = section != null ? courseRepository.findById(section.getCourseId()).orElse(null) : null;
+        if (course == null || !canEditCourse(user, course)) return ResponseEntity.status(403).build();
+        if (!"TEST".equals(material.getMaterialType()))
+            return ResponseEntity.badRequest().body(Map.of("error", "Это не тест"));
+
+        List<TestQuestion> oldQuestions = testQuestionRepository.findByMaterialIdOrderById(materialId);
+        for (TestQuestion q : oldQuestions) {
+            studentAnswerRepository.deleteAll(studentAnswerRepository.findByQuestionId(q.getId()));
+            testQuestionRepository.delete(q);
+        }
+        for (Map<String, Object> qData : questionsData) {
+            String text = (String) qData.get("text");
+            List<String> options = (List<String>) qData.get("options");
+            int correctIndex = (int) qData.get("correctOptionIndex");
+
+            TestQuestion question = new TestQuestion();
+            question.setText(text);
+            question.setMaterial(material);
+            testQuestionRepository.save(question);
+
+            List<AnswerOption> optEntities = new ArrayList<>();
+            for (int i = 0; i < options.size(); i++) {
+                AnswerOption opt = new AnswerOption();
+                opt.setText(options.get(i));
+                opt.setQuestion(question);
+                optEntities.add(opt);
+            }
+            answerOptionRepository.saveAll(optEntities);
+            question.setCorrectOption(optEntities.get(correctIndex));
+            testQuestionRepository.save(question);
+        }
+        return ResponseEntity.ok(Map.of("message", "Вопросы обновлены"));
+    }
+
+    // ========== DELETE MATERIAL ==========
     @DeleteMapping("/{materialId}")
     public ResponseEntity<?> deleteMaterial(@PathVariable Long materialId, Authentication auth) {
         User user = userRepository.findByEmail(auth.getName()).orElseThrow();
         CourseMaterial material = materialRepository.findById(materialId).orElse(null);
         if (material == null) return ResponseEntity.notFound().build();
-
         CourseSection section = sectionRepository.findById(material.getSectionId()).orElse(null);
         if (section == null) return ResponseEntity.notFound().build();
-
         Course course = courseRepository.findById(section.getCourseId()).orElse(null);
-        if (course == null || !canEditCourse(user, course)) {
-            return ResponseEntity.status(403).build();
-        }
+        if (course == null || !canEditCourse(user, course)) return ResponseEntity.status(403).build();
 
-        // 1. Удаляем submissions (для заданий)
         List<MaterialSubmission> submissions = submissionRepository.findAll()
                 .stream()
                 .filter(s -> s.getMaterialId().equals(materialId))
                 .toList();
         submissionRepository.deleteAll(submissions);
 
-        // 2. Если материал – тест, удаляем все связанные данные
         if ("TEST".equals(material.getMaterialType())) {
-            // 2a. Удаляем попытки и ответы студентов
             List<TestAttempt> attempts = testAttemptRepository.findByMaterialId(materialId);
             for (TestAttempt attempt : attempts) {
-                List<StudentAnswer> answers = studentAnswerRepository.findByAttemptId(attempt.getId());
-                studentAnswerRepository.deleteAll(answers);
+                studentAnswerRepository.deleteAll(studentAnswerRepository.findByAttemptId(attempt.getId()));
                 testAttemptRepository.delete(attempt);
             }
-            // 2b. Удаляем вопросы и варианты ответов
             List<TestQuestion> questions = testQuestionRepository.findByMaterialIdOrderById(materialId);
             for (TestQuestion question : questions) {
-                // Удаляем ответы студентов, связанные с вопросом (если остались)
-                List<StudentAnswer> answersByQuestion = studentAnswerRepository.findByQuestionId(question.getId());
-                studentAnswerRepository.deleteAll(answersByQuestion);
-                // Варианты ответов удалятся каскадно из-за cascade = ALL
+                studentAnswerRepository.deleteAll(studentAnswerRepository.findByQuestionId(question.getId()));
                 testQuestionRepository.delete(question);
             }
         }
-
-        // 3. Удаляем сам материал
         materialRepository.delete(material);
-
-        return ResponseEntity.ok(Map.of("message", "Материал и все связанные данные удалены"));
+        return ResponseEntity.ok(Map.of("message", "Материал удалён"));
     }
 
-    // ========== FILE UPLOAD FOR TEACHERS ==========
-
+    // ========== FILE UPLOAD FOR TEACHERS (при создании) ==========
     @PostMapping("/material/{materialId}/upload-file")
     public ResponseEntity<?> uploadMaterialFile(
             @PathVariable Long materialId,
             @RequestParam("file") MultipartFile file,
-            Authentication auth
-    ) throws Exception {
+            Authentication auth) throws Exception {
         User user = userRepository.findByEmail(auth.getName()).orElseThrow();
         CourseMaterial material = materialRepository.findById(materialId).orElse(null);
         if (material == null) return ResponseEntity.notFound().build();
-
         CourseSection section = sectionRepository.findById(material.getSectionId()).orElse(null);
         if (section == null) return ResponseEntity.notFound().build();
-
         Course course = courseRepository.findById(section.getCourseId()).orElse(null);
-        if (course == null || !canEditCourse(user, course)) {
-            return ResponseEntity.status(403).build();
-        }
+        if (course == null || !canEditCourse(user, course)) return ResponseEntity.status(403).build();
 
-        Path uploadDir = Paths.get("uploads/courses/materials");
+        Path uploadDir = UPLOAD_BASE.resolve("uploads").resolve("courses").resolve("materials");
         Files.createDirectories(uploadDir);
-
         String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
         Path target = uploadDir.resolve(fileName);
         file.transferTo(target);
+        System.out.println("File uploaded: " + target.toAbsolutePath());
 
-        material.setFilePath(target.toString());
+        String relativePath = "uploads/courses/materials/" + fileName;
+        material.setFilePath(relativePath);
         materialRepository.save(material);
-
-        return ResponseEntity.ok(Map.of(
-                "status", "success",
-                "filePath", target.toString(),
-                "message", "Файл загружен"
-        ));
+        return ResponseEntity.ok(Map.of("status", "success", "filePath", relativePath, "message", "Файл загружен"));
     }
 
-    // ========== SUBMISSIONS (for assignments) ==========
-
+    // ========== SUBMISSIONS ==========
     @PostMapping("/{materialId}/submit")
     public ResponseEntity<?> submitAssignment(
             @PathVariable Long materialId,
             @RequestParam("file") MultipartFile file,
-            Authentication auth
-    ) throws Exception {
+            Authentication auth) throws Exception {
         User user = userRepository.findByEmail(auth.getName()).orElseThrow();
         CourseMaterial material = materialRepository.findById(materialId).orElse(null);
         if (material == null) return ResponseEntity.notFound().build();
 
-        Path uploadDir = Paths.get("uploads/courses/submissions");
+        Path uploadDir = UPLOAD_BASE.resolve("uploads").resolve("courses").resolve("submissions");
         Files.createDirectories(uploadDir);
-
         String originalFilename = file.getOriginalFilename();
         String fileName = System.currentTimeMillis() + "_" + user.getId() + "_" + originalFilename;
         Path target = uploadDir.resolve(fileName);
         file.transferTo(target);
+        System.out.println("Submission saved: " + target.toAbsolutePath());
 
         MaterialSubmission submission = submissionRepository
                 .findByMaterialIdAndUserId(materialId, user.getId())
                 .orElse(new MaterialSubmission());
-
         submission.setMaterialId(materialId);
         submission.setUserId(user.getId());
         submission.setFilePath(target.toString());
         submission.setOriginalFilename(originalFilename);
         submission.setSubmittedAt(Instant.now());
         submission.setStatus("SUBMITTED");
-
         submissionRepository.save(submission);
-
-        return ResponseEntity.ok(Map.of(
-                "status", "completed",
-                "message", "Файл загружен"
-        ));
+        return ResponseEntity.ok(Map.of("status", "completed", "message", "Файл загружен"));
     }
 
     @GetMapping("/{materialId}/status")
     public ResponseEntity<?> getStatus(@PathVariable Long materialId, Authentication auth) {
         User user = userRepository.findByEmail(auth.getName()).orElseThrow();
-
         boolean completed = submissionRepository
                 .findByMaterialIdAndUserId(materialId, user.getId())
                 .isPresent();
-
-        return ResponseEntity.ok(Map.of(
-                "completed", completed,
-                "status", completed ? "Выполнено" : "Надо сделать"
-        ));
+        return ResponseEntity.ok(Map.of("completed", completed, "status", completed ? "Выполнено" : "Надо сделать"));
     }
 
     @GetMapping("/{materialId}/submissions")
-    public ResponseEntity<?> getSubmissions(
-            @PathVariable Long materialId,
-            Authentication auth
-    ) {
+    public ResponseEntity<?> getSubmissions(@PathVariable Long materialId, Authentication auth) {
         User user = userRepository.findByEmail(auth.getName()).orElseThrow();
         CourseMaterial material = materialRepository.findById(materialId).orElse(null);
         if (material == null) return ResponseEntity.notFound().build();
-
         CourseSection section = sectionRepository.findById(material.getSectionId()).orElse(null);
         if (section == null) return ResponseEntity.notFound().build();
-
         Course course = courseRepository.findById(section.getCourseId()).orElse(null);
-        if (course == null || !canEditCourse(user, course)) {
-            return ResponseEntity.status(403).build();
-        }
+        if (course == null || !canEditCourse(user, course)) return ResponseEntity.status(403).build();
 
         List<MaterialSubmission> submissions = submissionRepository.findAll()
                 .stream()
                 .filter(s -> s.getMaterialId().equals(materialId))
                 .toList();
-
         return ResponseEntity.ok(submissions);
     }
 
     // ========== TESTS ==========
-
     @PostMapping("/{materialId}/questions")
-    public ResponseEntity<?> addQuestion(@PathVariable Long materialId,
-                                         @RequestBody Map<String, Object> body,
-                                         Authentication auth) {
+    public ResponseEntity<?> addQuestion(@PathVariable Long materialId, @RequestBody Map<String, Object> body, Authentication auth) {
         User user = userRepository.findByEmail(auth.getName()).orElseThrow();
         CourseMaterial material = materialRepository.findById(materialId).orElse(null);
         if (material == null) return ResponseEntity.notFound().build();
-
         CourseSection section = sectionRepository.findById(material.getSectionId()).orElse(null);
         Course course = section != null ? courseRepository.findById(section.getCourseId()).orElse(null) : null;
-        if (course == null || !canEditCourse(user, course)) {
-            return ResponseEntity.status(403).build();
-        }
+        if (course == null || !canEditCourse(user, course)) return ResponseEntity.status(403).build();
 
         String questionText = (String) body.get("text");
         List<String> optionTexts = (List<String>) body.get("options");
@@ -348,10 +424,8 @@ public class MaterialController {
             options.add(opt);
         }
         answerOptionRepository.saveAll(options);
-
         question.setCorrectOption(options.get(correctIndex));
         testQuestionRepository.save(question);
-
         return ResponseEntity.ok(Map.of("id", question.getId()));
     }
 
@@ -373,13 +447,10 @@ public class MaterialController {
     }
 
     @PostMapping("/{materialId}/submit-test")
-    public ResponseEntity<?> submitTest(@PathVariable Long materialId,
-                                        @RequestBody Map<Long, Long> answers,
-                                        Authentication auth) {
+    public ResponseEntity<?> submitTest(@PathVariable Long materialId, @RequestBody Map<Long, Long> answers, Authentication auth) {
         User user = userRepository.findByEmail(auth.getName()).orElseThrow();
         CourseMaterial material = materialRepository.findById(materialId).orElse(null);
         if (material == null) return ResponseEntity.notFound().build();
-
         Optional<TestAttempt> existing = testAttemptRepository.findByMaterialIdAndUserId(materialId, user.getId());
         if (existing.isPresent()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Вы уже прошли этот тест"));
@@ -389,9 +460,7 @@ public class MaterialController {
         int correctCount = 0;
         for (TestQuestion q : questions) {
             Long selectedId = answers.get(q.getId());
-            if (selectedId != null && selectedId.equals(q.getCorrectOption().getId())) {
-                correctCount++;
-            }
+            if (selectedId != null && selectedId.equals(q.getCorrectOption().getId())) correctCount++;
         }
         int percent = (correctCount * 100) / questions.size();
 
@@ -401,7 +470,6 @@ public class MaterialController {
         attempt.setScorePercent(percent);
         attempt.setCompletedAt(Instant.now());
         testAttemptRepository.save(attempt);
-
         for (Map.Entry<Long, Long> entry : answers.entrySet()) {
             StudentAnswer sa = new StudentAnswer();
             sa.setAttemptId(attempt.getId());
@@ -409,7 +477,6 @@ public class MaterialController {
             sa.setSelectedOptionId(entry.getValue());
             studentAnswerRepository.save(sa);
         }
-
         return ResponseEntity.ok(Map.of("scorePercent", percent));
     }
 
@@ -417,16 +484,12 @@ public class MaterialController {
     public ResponseEntity<?> getTestResult(@PathVariable Long materialId, Authentication auth) {
         User user = userRepository.findByEmail(auth.getName()).orElseThrow();
         Optional<TestAttempt> attempt = testAttemptRepository.findByMaterialIdAndUserId(materialId, user.getId());
-        if (attempt.isEmpty()) {
-            return ResponseEntity.ok(Map.of("completed", false));
-        }
+        if (attempt.isEmpty()) return ResponseEntity.ok(Map.of("completed", false));
         return ResponseEntity.ok(Map.of("completed", true, "scorePercent", attempt.get().getScorePercent()));
     }
 
     // ========== HELPERS ==========
-
     private boolean canEditCourse(User user, Course course) {
-        return "ADMIN".equals(user.getRole()) ||
-                course.getTeacherId().equals(user.getId());
+        return "ADMIN".equals(user.getRole()) || course.getTeacherId().equals(user.getId());
     }
 }

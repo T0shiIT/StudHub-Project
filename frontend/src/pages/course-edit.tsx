@@ -9,6 +9,7 @@ interface Course {
   description: string;
   teacherId: number;
   coverImage?: string;
+  status?: string;
 }
 
 export default function CourseEditPage() {
@@ -19,6 +20,7 @@ export default function CourseEditPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [coverImage, setCoverImage] = useState('');
+  const [status, setStatus] = useState('ACTIVE');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -33,6 +35,7 @@ export default function CourseEditPage() {
           setTitle(data.title);
           setDescription(data.description || '');
           setCoverImage(data.coverImage || '');
+          setStatus(data.status || 'ACTIVE');
 
           if (user?.role !== 'ADMIN' && data.teacherId !== user.id) {
             navigate(`/courses/${id}`);
@@ -60,7 +63,7 @@ export default function CourseEditPage() {
       const res = await fetchWithCsrf(`http://localhost:8080/api/courses/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, coverImage }),
+        body: JSON.stringify({ title, description, coverImage, status }),
       });
 
       if (res.ok) {
@@ -142,6 +145,14 @@ export default function CourseEditPage() {
               <img src={coverImage} alt="Предпросмотр" />
             </div>
           )}
+        </div>
+
+        <div className="form-group">
+          <label>Статус курса</label>
+          <select value={status} onChange={(e) => setStatus(e.target.value)} disabled={saving}>
+            <option value="ACTIVE">Активный (доступен студентам)</option>
+            <option value="INACTIVE">Неактивный (только преподаватели и админ)</option>
+          </select>
         </div>
 
         {error && <div className="form-error">{error}</div>}

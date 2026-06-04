@@ -17,7 +17,7 @@ export default function MaterialDetailPage() {
   const { courseId, materialId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  
+
   const [material, setMaterial] = useState<Material | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -26,23 +26,23 @@ export default function MaterialDetailPage() {
   const [status, setStatus] = useState<string>('Загрузка...');
   const [testCompleted, setTestCompleted] = useState(false);
   const [testScore, setTestScore] = useState<number | null>(null);
-
-  useEffect(() => {
-    loadMaterial();
-  }, [materialId]);
+  const [fileInputKey, setFileInputKey] = useState(0);
 
   const loadMaterial = async () => {
+    setLoading(true);
     try {
       const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}`);
       if (res.ok) {
         const data = await res.json();
         setMaterial(data);
-        
+
         if (data.materialType === 'ASSIGNMENT') {
           await checkSubmissionStatus(data.id);
         } else if (data.materialType === 'TEST') {
           await checkTestResult(data.id);
         }
+      } else {
+        console.error('Material not found');
       }
     } catch (error) {
       console.error(error);
@@ -88,19 +88,21 @@ export default function MaterialDetailPage() {
       const formData = new FormData();
       formData.append('file', selectedFile);
 
-      const res = await fetch(`http://localhost:8080/api/materials/${materialId}/submit`, {
+      const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}/submit`, {
         method: 'POST',
-        credentials: 'include',
         body: formData,
       });
 
       if (res.ok) {
         setSubmitted(true);
         setStatus('Выполнено');
-        alert('Файл успешно загружен!');
         setSelectedFile(null);
+        setFileInputKey(k => k + 1);
+        alert('Файл успешно загружен!');
+        setTimeout(() => loadMaterial(), 500);
       } else {
-        alert('Ошибка загрузки файла');
+        const err = await res.text();
+        alert('Ошибка загрузки файла: ' + err);
       }
     } catch (error) {
       console.error(error);
@@ -109,6 +111,18 @@ export default function MaterialDetailPage() {
       setUploading(false);
     }
   };
+
+  useEffect(() => {
+    loadMaterial();
+  }, [materialId]);
+
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) loadMaterial();
+    };
+    window.addEventListener('pageshow', handlePageShow);
+    return () => window.removeEventListener('pageshow', handlePageShow);
+  }, []);
 
   if (loading) return <div className="material-detail-page">Загрузка...</div>;
   if (!material) return <div className="material-detail-page">Материал не найден</div>;
@@ -121,7 +135,7 @@ export default function MaterialDetailPage() {
 
       <div className="material-card">
         <h1>{material.title}</h1>
-        
+
         {material.description && (
           <div className="material-description">
             <h3>Описание</h3>
@@ -136,7 +150,6 @@ export default function MaterialDetailPage() {
           </div>
         )}
 
-        {/* Assignment */}
         {material.materialType === 'ASSIGNMENT' && (
           <div className="assignment-section">
             <div className="status-block">
@@ -146,13 +159,25 @@ export default function MaterialDetailPage() {
               </span>
             </div>
 
+            {material.filePath && (
+              <div className="download-section">
+                <a href={`http://localhost:8080/api/materials/download/${material.id}`} className="btn-secondary">
+                  📄 Скачать файл задания
+                </a>
+              </div>
+            )}
+
             {!submitted ? (
               <div className="submit-section">
                 <h3>Загрузить решение</h3>
                 <input
+                  key={fileInputKey}
                   type="file"
-                  onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
                   className="file-input"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setSelectedFile(file);
+                  }}
                 />
                 <button
                   className="btn-primary"
@@ -170,7 +195,6 @@ export default function MaterialDetailPage() {
           </div>
         )}
 
-        {/* Test */}
         {material.materialType === 'TEST' && (
           <div className="test-section">
             {!testCompleted ? (
@@ -191,7 +215,7 @@ export default function MaterialDetailPage() {
 
         {material.materialType === 'FILE' && material.filePath && (
           <div className="download-section">
-            <a href={material.filePath} target="_blank" rel="noopener noreferrer" className="btn-primary">
+            <a href={`http://localhost:8080/api/materials/download/${material.id}`} className="btn-primary">
               📄 Скачать файл
             </a>
           </div>

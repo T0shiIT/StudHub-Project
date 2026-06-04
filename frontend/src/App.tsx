@@ -15,6 +15,7 @@ import CourseDetailPage from './pages/course-detail'
 import CourseEditPage from './pages/course-edit';
 import MaterialDetailPage from './pages/material-detail';
 import TestPassing from './pages/TestPassing';
+import MaterialEditPage from './pages/material-edit';
 
 function App() {
   return (
@@ -41,6 +42,7 @@ function App() {
             <Route path="courses/:id" element={<CourseDetailPage />} />
             <Route path="courses" element={<CoursesPage />} />
             <Route path="courses/:courseId/materials/:materialId/test" element={<TestPassing />} />
+            <Route path="courses/:courseId/materials/:materialId/edit" element={<MaterialEditPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
