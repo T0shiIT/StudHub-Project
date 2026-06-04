@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { fetchWithCsrf } from '../utils/csrf';
+import { ScheduleBell } from './ScheduleBell'; // <-- Импортируем компонент
 
 export default function Header() {
   const navigate = useNavigate();
@@ -22,6 +23,8 @@ export default function Header() {
     <header className="header">
       <h1>StudHub</h1>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {isAuthenticated && <ScheduleBell />} {/* <-- Показываем колокольчик только авторизованным */}
+        
         {isAuthenticated ? (
           <>
             <span>{user?.login || user?.default_email || 'Пользователь'}</span>
