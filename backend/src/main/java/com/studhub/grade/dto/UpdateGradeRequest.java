@@ -1,19 +1,21 @@
 package com.studhub.grade.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 
 public class UpdateGradeRequest {
-    @NotBlank
+
+    @NotBlank(message = "Grade is required")
     private String grade;
 
-    @NotNull
-    private Long teacherId;
+    // Конструктор по умолчанию (нужен для Jackson)
+    public UpdateGradeRequest() {}
 
-    // Геттеры и сеттеры
-    public String getGrade() { return grade; }
-    public void setGrade(String grade) { this.grade = grade; }
+    // Геттер и сеттер
+    public String getGrade() {
+        return grade;
+    }
 
-    public Long getTeacherId() { return teacherId; }
-    public void setTeacherId(Long teacherId) { this.teacherId = teacherId; }
+    public void setGrade(String grade) {
+        this.grade = grade;
+    }
 }

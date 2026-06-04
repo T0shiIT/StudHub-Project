@@ -2,6 +2,7 @@ package com.studhub.grade;
 
 import com.studhub.grade.dto.CreateGradeRequest;
 import com.studhub.grade.dto.GradeDto;
+import com.studhub.grade.dto.SavePreviewRequest;
 import com.studhub.grade.dto.UpdateGradeRequest;
 import com.studhub.user.User;
 import com.studhub.user.UserRepository;
@@ -11,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -102,13 +104,11 @@ public class GradeService {
         );
     }
 
-    // ======================== НОВЫЙ МЕТОД ДЛЯ ОБНОВЛЕНИЯ ДАТЫ ========================
     @Transactional
     public GradeDto updateGradeDate(Long gradeId, LocalDate newDate, Long teacherId) {
         Grade grade = gradeRepository.findById(gradeId)
             .orElseThrow(() -> new RuntimeException("Grade not found"));
 
-        // Проверяем, не существует ли уже оценки с таким же студентом, предметом и новой датой
         gradeRepository.findByStudentAndSubjectAndDate(grade.getStudent(), grade.getSubject(), newDate)
             .ifPresent(existingGrade -> {
                 if (!existingGrade.getId().equals(gradeId)) {
@@ -124,6 +124,49 @@ public class GradeService {
 
         Grade saved = gradeRepository.save(grade);
         return toDto(saved);
+    }
+
+    // ======================== НОВЫЙ МЕТОД ДЛЯ СОХРАНЕНИЯ ПРЕДПРОСМОТРА ========================
+    @Transactional
+    public int savePreview(SavePreviewRequest request, Long teacherId) {
+        User teacher = userRepository.findById(teacherId)
+                .orElseThrow(() -> new RuntimeException("Teacher not found"));
+        String subject = request.getSubject() != null ? request.getSubject() : "Основной предмет";
+        int savedCount = 0;
+
+        for (SavePreviewRequest.StudentPreview sp : request.getStudents()) {
+            // Найти или создать студента по имени и группе
+            User student = userRepository.findByFirstNameAndLastNameAndGroupName(
+                    sp.getFirstName(), sp.getLastName(), sp.getGroup())
+                    .orElseGet(() -> {
+                        User newStudent = new User();
+                        newStudent.setFirstName(sp.getFirstName());
+                        newStudent.setLastName(sp.getLastName());
+                        newStudent.setGroupName(sp.getGroup());
+                        newStudent.setRole("STUDENT");
+                        // Генерация логина и email
+                        String login = (sp.getFirstName() + "." + sp.getLastName()).toLowerCase();
+                        String email = login + "@studhub.local";
+                        newStudent.setLogin(login);
+                        newStudent.setEmail(email);
+                        newStudent.setPasswordHash(""); // временно, позже можно улучшить
+                        return userRepository.save(newStudent);
+                    });
+
+            Map<String, Integer> studentGrades = request.getGrades().get(sp.getId());
+            if (studentGrades == null) continue;
+
+            for (Map.Entry<String, Integer> entry : studentGrades.entrySet()) {
+                String dateStr = entry.getKey();
+                Integer gradeValue = entry.getValue();
+                if (gradeValue == null) continue;
+                LocalDate date = LocalDate.parse(dateStr);
+                String gradeStr = String.valueOf(gradeValue);
+                saveGrade(student, subject, gradeStr, date, teacher);
+                savedCount++;
+            }
+        }
+        return savedCount;
     }
 
     private GradeDto toDto(Grade grade) {

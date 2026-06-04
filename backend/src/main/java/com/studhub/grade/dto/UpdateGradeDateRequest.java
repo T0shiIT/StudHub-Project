@@ -8,6 +8,8 @@ public class UpdateGradeDateRequest {
     @NotNull(message = "Date is required")
     private LocalDate date;
 
+    public UpdateGradeDateRequest() {}
+
     public LocalDate getDate() {
         return date;
     }
