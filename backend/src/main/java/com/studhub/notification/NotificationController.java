@@ -5,6 +5,8 @@ import com.studhub.user.UserRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -31,7 +33,12 @@ public class NotificationController {
         if (user == null) {
             return ResponseEntity.status(401).body(Map.of("error", "User not found"));
         }
-        return ResponseEntity.ok(notificationService.getUserNotifications(user.getId(), limit));
+        List<Notification> notifications = notificationService.getUserNotifications(user.getId(), limit);
+        
+        // Возвращаем объект с полем "notifications", как ожидает фронт
+        Map<String, Object> response = new HashMap<>();
+        response.put("notifications", notifications);
+        return ResponseEntity.ok(response);
     }
 
     @PatchMapping("/mark-read")

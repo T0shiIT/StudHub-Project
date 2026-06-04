@@ -39,13 +39,19 @@ public class Notification {
     // Геттеры и сеттеры
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
     public User getUser() { return user; }
     public void setUser(User user) { this.user = user; }
+
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; }
+
     public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }  // <-- добавлен
+
     public boolean isRead() { return read; }
     public void setRead(boolean read) { this.read = read; }
+
     public String getType() { return type; }
     public void setType(String type) { this.type = type; }
 }

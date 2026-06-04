@@ -36,7 +36,7 @@ public class NotificationService {
             n.setMessage(message);
             n.setCreatedAt(now);
             n.setRead(false);
-            n.setType("SCHEDULE_UPDATE");
+            n.setType("SCHEDULE_UPDATE");   // фронт ищет тип, содержащий 'SCHEDULE'
             notifications.add(n);
         }
 

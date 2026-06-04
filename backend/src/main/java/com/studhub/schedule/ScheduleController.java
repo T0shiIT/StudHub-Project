@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.studhub.auth.CppUserClient;
+import com.studhub.notification.NotificationService;
 import com.studhub.user.User;
 import com.studhub.user.UserRepository;
 import org.springframework.http.MediaType;
@@ -55,15 +56,18 @@ public class ScheduleController {
     private final ScheduleParserClient scheduleParserClient;
     private final UserRepository userRepository;
     private final ScheduleUploadRepository scheduleUploadRepository;
+    private final NotificationService notificationService; // добавлено
 
     public ScheduleController(CppUserClient cppUserClient,
                               ScheduleParserClient scheduleParserClient,
                               UserRepository userRepository,
-                              ScheduleUploadRepository scheduleUploadRepository) {
+                              ScheduleUploadRepository scheduleUploadRepository,
+                              NotificationService notificationService) { // добавлен параметр
         this.cppUserClient = cppUserClient;
         this.scheduleParserClient = scheduleParserClient;
         this.userRepository = userRepository;
         this.scheduleUploadRepository = scheduleUploadRepository;
+        this.notificationService = notificationService;
     }
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -78,7 +82,7 @@ public class ScheduleController {
             return ResponseEntity.status(401).body(Map.of("error", "Пользователь не найден"));
         }
 
-        // В методе uploadSchedule, после получения currentUser:
+        // Отладка
         System.out.println("====== DEBUG SCHEDULE UPLOAD ======");
         System.out.println("Email из сессии: " + authentication.getName());
         System.out.println("Email из БД: " + currentUser.getEmail());
@@ -132,6 +136,15 @@ public class ScheduleController {
         CppUserClient.Result saveResult = cppUserClient.uploadSchedule(currentUser.getId(), payload);
         if (!saveResult.isSuccess()) {
             return ResponseEntity.status(saveResult.status()).body(saveResult.body());
+        }
+
+        // СОЗДАЁМ УВЕДОМЛЕНИЯ ОБ ИЗМЕНЕНИИ РАСПИСАНИЯ
+        try {
+            notificationService.notifyScheduleUpdate(scheduleFileName, currentUser.getEmail());
+            System.out.println(">>> Уведомления об изменении расписания отправлены студентам и преподавателям");
+        } catch (Exception e) {
+            System.err.println("Ошибка при создании уведомлений: " + e.getMessage());
+            // Не прерываем выполнение, только логируем
         }
 
         // Ответ: сообщение + JSON расписания

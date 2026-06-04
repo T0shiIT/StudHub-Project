@@ -13,6 +13,22 @@ CREATE TABLE IF NOT EXISTS app_users (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- NOTIFICATIONS (добавлено для уведомлений об изменениях расписания и др.)
+CREATE TABLE IF NOT EXISTS notifications (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES app_users(user_id) ON DELETE CASCADE,
+    message VARCHAR(512) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    type VARCHAR(255) NOT NULL
+);
+
+-- Индексы для уведомлений (оптимизация запросов)
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
+
+-- GRADES
 CREATE TABLE IF NOT EXISTS grades (
     id SERIAL PRIMARY KEY,
     student_id INTEGER NOT NULL REFERENCES app_users(user_id),
@@ -25,6 +41,7 @@ CREATE TABLE IF NOT EXISTS grades (
     CONSTRAINT uk_student_subject_date UNIQUE (student_id, subject, date)
 );
 
+-- SCHEDULE UPLOADS
 CREATE TABLE IF NOT EXISTS schedule_uploads (
     id SERIAL PRIMARY KEY,
     file_name TEXT NOT NULL,
@@ -34,6 +51,7 @@ CREATE TABLE IF NOT EXISTS schedule_uploads (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- EMAIL VERIFICATION TOKENS
 CREATE TABLE IF NOT EXISTS email_verification_tokens (
     id SERIAL PRIMARY KEY,
     token VARCHAR(64) UNIQUE NOT NULL,
@@ -44,6 +62,7 @@ CREATE TABLE IF NOT EXISTS email_verification_tokens (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- COURSES
 CREATE TABLE IF NOT EXISTS courses (
     course_id SERIAL PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
@@ -52,9 +71,11 @@ CREATE TABLE IF NOT EXISTS courses (
     cover_image TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    is_deleted BOOLEAN DEFAULT FALSE
+    is_deleted BOOLEAN DEFAULT FALSE,
+    status VARCHAR(20) DEFAULT 'ACTIVE' NOT NULL
 );
 
+-- ENROLLMENTS
 CREATE TABLE IF NOT EXISTS enrollments (
     enrollment_id SERIAL PRIMARY KEY,
     course_id INTEGER NOT NULL REFERENCES courses(course_id) ON DELETE CASCADE,
@@ -62,7 +83,7 @@ CREATE TABLE IF NOT EXISTS enrollments (
     UNIQUE(course_id, user_id)
 );
 
--- Секции курса (категории)
+-- COURSE SECTIONS
 CREATE TABLE IF NOT EXISTS course_sections (
     section_id SERIAL PRIMARY KEY,
     course_id INTEGER NOT NULL REFERENCES courses(course_id) ON DELETE CASCADE,
@@ -71,7 +92,7 @@ CREATE TABLE IF NOT EXISTS course_sections (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Материалы и задания
+-- COURSE MATERIALS
 CREATE TABLE IF NOT EXISTS course_materials (
     material_id SERIAL PRIMARY KEY,
     section_id INTEGER NOT NULL REFERENCES course_sections(section_id) ON DELETE CASCADE,
@@ -85,7 +106,7 @@ CREATE TABLE IF NOT EXISTS course_materials (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Отправленные работы студентов
+-- MATERIAL SUBMISSIONS
 CREATE TABLE IF NOT EXISTS material_submissions (
     submission_id SERIAL PRIMARY KEY,
     material_id INTEGER NOT NULL REFERENCES course_materials(material_id) ON DELETE CASCADE,
@@ -95,10 +116,7 @@ CREATE TABLE IF NOT EXISTS material_submissions (
     UNIQUE(material_id, user_id)
 );
 
-CREATE INDEX idx_materials_section ON course_materials(section_id);
-CREATE INDEX idx_submissions_material_user ON material_submissions(material_id, user_id);
-
--- Таблицы тестов (исправлены ссылки на course_materials и app_users)
+-- TEST QUESTIONS
 CREATE TABLE IF NOT EXISTS test_questions (
     id BIGSERIAL PRIMARY KEY,
     text TEXT NOT NULL,
@@ -106,6 +124,7 @@ CREATE TABLE IF NOT EXISTS test_questions (
     correct_option_id BIGINT
 );
 
+-- ANSWER OPTIONS
 CREATE TABLE IF NOT EXISTS answer_options (
     id BIGSERIAL PRIMARY KEY,
     text TEXT NOT NULL,
@@ -114,6 +133,7 @@ CREATE TABLE IF NOT EXISTS answer_options (
 
 ALTER TABLE test_questions ADD CONSTRAINT fk_correct_option FOREIGN KEY (correct_option_id) REFERENCES answer_options(id) ON DELETE SET NULL;
 
+-- TEST ATTEMPTS
 CREATE TABLE IF NOT EXISTS test_attempts (
     id BIGSERIAL PRIMARY KEY,
     material_id BIGINT NOT NULL REFERENCES course_materials(material_id) ON DELETE CASCADE,
@@ -122,6 +142,7 @@ CREATE TABLE IF NOT EXISTS test_attempts (
     completed_at TIMESTAMP NOT NULL
 );
 
+-- STUDENT ANSWERS
 CREATE TABLE IF NOT EXISTS student_answers (
     id BIGSERIAL PRIMARY KEY,
     attempt_id BIGINT NOT NULL REFERENCES test_attempts(id) ON DELETE CASCADE,
@@ -129,4 +150,6 @@ CREATE TABLE IF NOT EXISTS student_answers (
     selected_option_id BIGINT NOT NULL REFERENCES answer_options(id) ON DELETE CASCADE
 );
 
-ALTER TABLE courses ADD COLUMN status VARCHAR(20) DEFAULT 'ACTIVE' NOT NULL;
+-- Дополнительные индексы (для производительности)
+CREATE INDEX IF NOT EXISTS idx_materials_section ON course_materials(section_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_material_user ON material_submissions(material_id, user_id);
