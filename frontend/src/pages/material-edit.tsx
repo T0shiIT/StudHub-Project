@@ -74,11 +74,15 @@ export default function MaterialEditPage() {
       const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}/questions`);
       if (res.ok) {
         const data = await res.json();
-        const qs: Question[] = data.map((q: any) => ({
-          text: q.text,
-          options: q.options.map((opt: any) => opt.text),
-          correctOptionIndex: q.options.findIndex((opt: any) => opt.id === q.correctOptionId)
-        }));
+        const qs: Question[] = data.map((q: any) => {
+          let correctIdx = q.options.findIndex((opt: any) => opt.id === q.correctOptionId);
+          if (correctIdx === -1 && q.options.length > 0) correctIdx = 0;
+          return {
+            text: q.text,
+            options: q.options.map((opt: any) => opt.text),
+            correctOptionIndex: correctIdx
+          };
+        });
         setQuestions(qs);
       }
     } catch (err) {
@@ -87,13 +91,14 @@ export default function MaterialEditPage() {
   };
 
   const handleSave = async () => {
+    console.log("questions =", questions);
+    console.log("currentQuestion =", currentQuestion);
     if (!title.trim()) {
       alert('Введите название');
       return;
     }
     setSaving(true);
     try {
-      // 1. Обновляем метаданные
       const metaRes = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -106,40 +111,48 @@ export default function MaterialEditPage() {
       });
       if (!metaRes.ok) throw new Error('Ошибка обновления метаданных');
 
-      // 2. Если тип TEST – обновляем вопросы
       if (material?.materialType === 'TEST') {
-        const questionsRes = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}/questions`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(questions)
-        });
+        // Если в черновике есть заполненный вопрос — автоматически добавляем его
+        let finalQuestions = [...questions];
+        if (
+          editingIndex === null &&
+          currentQuestion.text.trim() &&
+          currentQuestion.options.every(o => o.trim())
+        ) {
+          finalQuestions = [...finalQuestions, { ...currentQuestion }];
+        }
+
+        const validQuestions = finalQuestions.map(q => ({
+          ...q,
+          correctOptionIndex:
+            q.correctOptionIndex >= 0 && q.correctOptionIndex < q.options.length
+              ? q.correctOptionIndex
+              : 0
+        }));
+
+        const questionsRes = await fetchWithCsrf(
+          `http://localhost:8080/api/materials/${materialId}/questions`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(validQuestions)
+          }
+        );
         if (!questionsRes.ok) throw new Error('Ошибка обновления вопросов');
       }
 
-      // 3. Если выбран новый файл (для FILE или ASSIGNMENT)
       if (selectedFile && (material?.materialType === 'FILE' || material?.materialType === 'ASSIGNMENT')) {
         const formData = new FormData();
         formData.append('file', selectedFile);
         const fileRes = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}/replace-file`, {
           method: 'POST',
-          body: formData,
+          body: formData
         });
-        if (!fileRes.ok) {
-          const errorText = await fileRes.text();
-          console.error('Replace file error:', errorText);
-          alert(`Ошибка замены файла: ${errorText}`);
-          throw new Error('Ошибка замены файла');
-        }
-        const result = await fileRes.json();
-        console.log('File replaced, new path:', result.filePath);
-        // Обновляем локальный материал (чтобы в следующем шаге был актуальный путь)
-        setMaterial(prev => prev ? { ...prev, filePath: result.filePath } : prev);
+        if (!fileRes.ok) throw new Error('Ошибка замены файла');
       }
 
       alert('Материал обновлён');
-      // Переход с последующей перезагрузкой страницы материала
       navigate(`/courses/${courseId}/materials/${materialId}`);
-      // Небольшая задержка, чтобы сервер успел обработать запрос
       setTimeout(() => window.location.reload(), 100);
     } catch (err: any) {
       alert(err.message);
@@ -148,7 +161,7 @@ export default function MaterialEditPage() {
     }
   };
 
-  // Функции для управления вопросами (без изменений)
+  // ========== Функции для управления вопросами ==========
   const startEdit = (index: number) => {
     setEditingIndex(index);
     setCurrentQuestion({ ...questions[index] });
@@ -260,7 +273,7 @@ export default function MaterialEditPage() {
             <h3>Вопросы теста</h3>
             {questions.map((q, idx) => (
               <div key={idx} className="added-question">
-                <span>{idx+1}. {q.text}</span>
+                <span>{idx + 1}. {q.text}</span>
                 <div>
                   <button type="button" onClick={() => startEdit(idx)}>✏️</button>
                   <button type="button" onClick={() => removeQuestion(idx)}>🗑️</button>
@@ -270,7 +283,7 @@ export default function MaterialEditPage() {
             <div className="new-question">
               <input
                 type="text"
-                placeholder={editingIndex !== null ? "Редактирование вопроса" : "Текст нового вопроса"}
+                placeholder={editingIndex !== null ? 'Редактирование вопроса' : 'Текст нового вопроса'}
                 value={currentQuestion.text}
                 onChange={(e) => setCurrentQuestion({ ...currentQuestion, text: e.target.value })}
               />
@@ -278,7 +291,7 @@ export default function MaterialEditPage() {
                 <div key={i} className="option-row">
                   <input
                     type="text"
-                    placeholder={`Вариант ${i+1}`}
+                    placeholder={`Вариант ${i + 1}`}
                     value={opt}
                     onChange={(e) => updateOption(i, e.target.value)}
                   />
@@ -313,7 +326,10 @@ export default function MaterialEditPage() {
           <button className="btn-primary" onClick={handleSave} disabled={saving}>
             {saving ? 'Сохранение...' : 'Сохранить изменения'}
           </button>
-          <button className="btn-secondary" onClick={() => navigate(`/courses/${courseId}/materials/${materialId}`)}>
+          <button
+            className="btn-secondary"
+            onClick={() => navigate(`/courses/${courseId}/materials/${materialId}`)}
+          >
             Отмена
           </button>
         </div>

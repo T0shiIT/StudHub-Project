@@ -5,6 +5,5 @@ import java.util.List;
 
 public interface StudentAnswerRepository extends JpaRepository<StudentAnswer, Long> {
     List<StudentAnswer> findByAttemptId(Long attemptId);
-    
-    List<StudentAnswer> findByQuestionId(Long questionId);
+    List<StudentAnswer> findByQuestionId(Long questionId);   // ← добавить
 }

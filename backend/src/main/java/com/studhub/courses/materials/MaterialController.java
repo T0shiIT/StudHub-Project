@@ -33,7 +33,6 @@ public class MaterialController {
     private final TestAttemptRepository testAttemptRepository;
     private final StudentAnswerRepository studentAnswerRepository;
 
-    // Базовая директория для загрузки файлов (поддержка Docker и локального запуска)
     private static final Path UPLOAD_BASE;
 
     static {
@@ -108,11 +107,7 @@ public class MaterialController {
                     studentAnswerRepository.deleteAll(studentAnswerRepository.findByAttemptId(attempt.getId()));
                     testAttemptRepository.delete(attempt);
                 }
-                List<TestQuestion> questions = testQuestionRepository.findByMaterialIdOrderById(material.getId());
-                for (TestQuestion q : questions) {
-                    studentAnswerRepository.deleteAll(studentAnswerRepository.findByQuestionId(q.getId()));
-                    testQuestionRepository.delete(q);
-                }
+                deleteQuestionsForMaterial(material.getId());
             }
             materialRepository.delete(material);
         }
@@ -245,21 +240,29 @@ public class MaterialController {
         User user = userRepository.findByEmail(auth.getName()).orElseThrow();
         CourseMaterial material = materialRepository.findById(materialId).orElse(null);
         if (material == null) return ResponseEntity.notFound().build();
+
         CourseSection section = sectionRepository.findById(material.getSectionId()).orElse(null);
         Course course = section != null ? courseRepository.findById(section.getCourseId()).orElse(null) : null;
-        if (course == null || !canEditCourse(user, course)) return ResponseEntity.status(403).build();
-        if (!"TEST".equals(material.getMaterialType()))
-            return ResponseEntity.badRequest().body(Map.of("error", "Это не тест"));
-
-        List<TestQuestion> oldQuestions = testQuestionRepository.findByMaterialIdOrderById(materialId);
-        for (TestQuestion q : oldQuestions) {
-            studentAnswerRepository.deleteAll(studentAnswerRepository.findByQuestionId(q.getId()));
-            testQuestionRepository.delete(q);
+        if (course == null || !canEditCourse(user, course)) {
+            return ResponseEntity.status(403).build();
         }
+
+        if (!"TEST".equals(material.getMaterialType())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Это не тест"));
+        }
+
+        // Удаляем старые вопросы с правильным порядком (FK: question.correctOption → answer_option)
+        deleteQuestionsForMaterial(materialId);
+
+        // Создаём новые вопросы
         for (Map<String, Object> qData : questionsData) {
             String text = (String) qData.get("text");
+            if (text == null || text.isBlank()) continue;
+
             List<String> options = (List<String>) qData.get("options");
-            int correctIndex = (int) qData.get("correctOptionIndex");
+            if (options == null || options.isEmpty()) continue;
+
+            int correctIndex = parseCorrectIndex(qData.get("correctOptionIndex"));
 
             TestQuestion question = new TestQuestion();
             question.setText(text);
@@ -267,16 +270,22 @@ public class MaterialController {
             testQuestionRepository.save(question);
 
             List<AnswerOption> optEntities = new ArrayList<>();
-            for (int i = 0; i < options.size(); i++) {
+            for (String optText : options) {
                 AnswerOption opt = new AnswerOption();
-                opt.setText(options.get(i));
+                opt.setText(optText);
                 opt.setQuestion(question);
                 optEntities.add(opt);
             }
             answerOptionRepository.saveAll(optEntities);
+
+            if (correctIndex < 0 || correctIndex >= optEntities.size()) {
+                System.err.println("Invalid correctIndex " + correctIndex + " for question '" + text + "', using 0");
+                correctIndex = 0;
+            }
             question.setCorrectOption(optEntities.get(correctIndex));
             testQuestionRepository.save(question);
         }
+
         return ResponseEntity.ok(Map.of("message", "Вопросы обновлены"));
     }
 
@@ -303,17 +312,13 @@ public class MaterialController {
                 studentAnswerRepository.deleteAll(studentAnswerRepository.findByAttemptId(attempt.getId()));
                 testAttemptRepository.delete(attempt);
             }
-            List<TestQuestion> questions = testQuestionRepository.findByMaterialIdOrderById(materialId);
-            for (TestQuestion question : questions) {
-                studentAnswerRepository.deleteAll(studentAnswerRepository.findByQuestionId(question.getId()));
-                testQuestionRepository.delete(question);
-            }
+            deleteQuestionsForMaterial(materialId);
         }
         materialRepository.delete(material);
         return ResponseEntity.ok(Map.of("message", "Материал удалён"));
     }
 
-    // ========== FILE UPLOAD FOR TEACHERS (при создании) ==========
+    // ========== FILE UPLOAD FOR TEACHERS ==========
     @PostMapping("/material/{materialId}/upload-file")
     public ResponseEntity<?> uploadMaterialFile(
             @PathVariable Long materialId,
@@ -409,7 +414,7 @@ public class MaterialController {
 
         String questionText = (String) body.get("text");
         List<String> optionTexts = (List<String>) body.get("options");
-        int correctIndex = (int) body.get("correctOptionIndex");
+        int correctIndex = parseCorrectIndex(body.get("correctOptionIndex"));
 
         TestQuestion question = new TestQuestion();
         question.setText(questionText);
@@ -417,13 +422,14 @@ public class MaterialController {
         testQuestionRepository.save(question);
 
         List<AnswerOption> options = new ArrayList<>();
-        for (int i = 0; i < optionTexts.size(); i++) {
+        for (String optText : optionTexts) {
             AnswerOption opt = new AnswerOption();
-            opt.setText(optionTexts.get(i));
+            opt.setText(optText);
             opt.setQuestion(question);
             options.add(opt);
         }
         answerOptionRepository.saveAll(options);
+        if (correctIndex < 0 || correctIndex >= options.size()) correctIndex = 0;
         question.setCorrectOption(options.get(correctIndex));
         testQuestionRepository.save(question);
         return ResponseEntity.ok(Map.of("id", question.getId()));
@@ -435,13 +441,15 @@ public class MaterialController {
         List<Map<String, Object>> result = new ArrayList<>();
         for (TestQuestion q : questions) {
             List<AnswerOption> opts = answerOptionRepository.findByQuestionId(q.getId());
-            result.add(Map.of(
-                    "id", q.getId(),
-                    "text", q.getText(),
-                    "options", opts.stream()
-                            .map(opt -> Map.of("id", opt.getId(), "text", opt.getText()))
-                            .collect(Collectors.toList())
-            ));
+            // Используем HashMap вместо Map.of() — он поддерживает null-значения
+            Map<String, Object> qMap = new HashMap<>();
+            qMap.put("id", q.getId());
+            qMap.put("text", q.getText());
+            qMap.put("correctOptionId", q.getCorrectOption() != null ? q.getCorrectOption().getId() : null);
+            qMap.put("options", opts.stream()
+                    .map(opt -> Map.of("id", opt.getId(), "text", opt.getText()))
+                    .collect(Collectors.toList()));
+            result.add(qMap);
         }
         return ResponseEntity.ok(result);
     }
@@ -460,9 +468,11 @@ public class MaterialController {
         int correctCount = 0;
         for (TestQuestion q : questions) {
             Long selectedId = answers.get(q.getId());
-            if (selectedId != null && selectedId.equals(q.getCorrectOption().getId())) correctCount++;
+            if (selectedId != null && q.getCorrectOption() != null && selectedId.equals(q.getCorrectOption().getId())) {
+                correctCount++;
+            }
         }
-        int percent = (correctCount * 100) / questions.size();
+        int percent = questions.isEmpty() ? 0 : (correctCount * 100) / questions.size();
 
         TestAttempt attempt = new TestAttempt();
         attempt.setMaterialId(materialId);
@@ -489,7 +499,55 @@ public class MaterialController {
     }
 
     // ========== HELPERS ==========
+
     private boolean canEditCourse(User user, Course course) {
         return "ADMIN".equals(user.getRole()) || course.getTeacherId().equals(user.getId());
+    }
+
+    /**
+     * Правильный порядок удаления вопросов теста:
+     * 1. Сначала обнуляем FK question.correctOption → null (иначе нельзя удалить AnswerOption)
+     * 2. Удаляем StudentAnswer по questionId
+     * 3. Удаляем AnswerOption
+     * 4. Удаляем TestQuestion
+     */
+    private void deleteQuestionsForMaterial(Long materialId) {
+        List<TestQuestion> questions = testQuestionRepository.findByMaterialIdOrderById(materialId);
+        for (TestQuestion q : questions) {
+            // Шаг 1: обнуляем correctOption чтобы снять FK-ограничение
+            q.setCorrectOption(null);
+            testQuestionRepository.save(q);
+        }
+        for (TestQuestion q : questions) {
+            // Шаг 2: удаляем StudentAnswer
+            List<StudentAnswer> studentAnswers = studentAnswerRepository.findByQuestionId(q.getId());
+            if (!studentAnswers.isEmpty()) {
+                studentAnswerRepository.deleteAll(studentAnswers);
+            }
+            // Шаг 3: удаляем AnswerOption
+            List<AnswerOption> opts = answerOptionRepository.findByQuestionId(q.getId());
+            if (!opts.isEmpty()) {
+                answerOptionRepository.deleteAll(opts);
+            }
+            // Шаг 4: удаляем сам вопрос
+            testQuestionRepository.delete(q);
+        }
+    }
+
+    /**
+     * Безопасное извлечение correctOptionIndex из Map (Integer, Long или String)
+     */
+    private int parseCorrectIndex(Object correctObj) {
+        if (correctObj == null) return 0;
+        if (correctObj instanceof Integer) return (Integer) correctObj;
+        if (correctObj instanceof Long) return ((Long) correctObj).intValue();
+        if (correctObj instanceof String) {
+            try {
+                return Integer.parseInt((String) correctObj);
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+        return 0;
     }
 }
