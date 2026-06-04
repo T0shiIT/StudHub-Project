@@ -102,6 +102,30 @@ public class GradeService {
         );
     }
 
+    // ======================== НОВЫЙ МЕТОД ДЛЯ ОБНОВЛЕНИЯ ДАТЫ ========================
+    @Transactional
+    public GradeDto updateGradeDate(Long gradeId, LocalDate newDate, Long teacherId) {
+        Grade grade = gradeRepository.findById(gradeId)
+            .orElseThrow(() -> new RuntimeException("Grade not found"));
+
+        // Проверяем, не существует ли уже оценки с таким же студентом, предметом и новой датой
+        gradeRepository.findByStudentAndSubjectAndDate(grade.getStudent(), grade.getSubject(), newDate)
+            .ifPresent(existingGrade -> {
+                if (!existingGrade.getId().equals(gradeId)) {
+                    throw new RuntimeException("Grade already exists for this student, subject and date");
+                }
+            });
+
+        User teacher = userRepository.findById(teacherId)
+            .orElseThrow(() -> new RuntimeException("Teacher not found"));
+
+        grade.setDate(newDate);
+        grade.setTeacher(teacher);
+
+        Grade saved = gradeRepository.save(grade);
+        return toDto(saved);
+    }
+
     private GradeDto toDto(Grade grade) {
         return new GradeDto(
             grade.getId(),

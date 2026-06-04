@@ -6,6 +6,7 @@ import com.studhub.grade.dto.CreateGradeRequest;
 import com.studhub.grade.dto.GradeDto;
 import com.studhub.grade.dto.GradeUploadResponse;
 import com.studhub.grade.dto.UpdateGradeRequest;
+import com.studhub.grade.dto.UpdateGradeDateRequest;
 import com.studhub.schedule.ScheduleParserClient;
 import com.studhub.user.User;
 import com.studhub.user.UserRepository;
@@ -59,8 +60,6 @@ public class GradeController {
         // но администратору можно вернуть пустой список, если group не передан (чтобы не было ошибки 400)
         if (group == null || group.isBlank()) {
             if ("ADMIN".equalsIgnoreCase(currentUser.getRole())) {
-                // Можно вернуть пустой список или агрегированные данные по всем группам.
-                // Пока возвращаем пустой список – фронтенд сам подскажет выбрать группу.
                 return ResponseEntity.ok(Collections.emptyList());
             }
             return ResponseEntity.badRequest().body(Map.of("error", "Parameter 'group' is required for teacher/admin"));
@@ -130,6 +129,30 @@ public class GradeController {
             return ResponseEntity.status(HttpStatus.CREATED).body(created);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ======================== ОБНОВЛЕНИЕ ДАТЫ ОЦЕНКИ ========================
+    @PatchMapping("/{gradeId}/date")
+    public ResponseEntity<?> updateGradeDate(@PathVariable Long gradeId,
+                                             @Valid @RequestBody UpdateGradeDateRequest request,
+                                             Authentication auth) {
+        if (auth == null || !auth.isAuthenticated())
+            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
+
+        String email = auth.getName();
+        User teacher = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (!"TEACHER".equalsIgnoreCase(teacher.getRole()) && !"ADMIN".equalsIgnoreCase(teacher.getRole())) {
+            return ResponseEntity.status(403).body(Map.of("error", "Insufficient permissions"));
+        }
+
+        try {
+            GradeDto updated = gradeService.updateGradeDate(gradeId, request.getDate(), teacher.getId());
+            return ResponseEntity.ok(updated);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
         }
     }
 
