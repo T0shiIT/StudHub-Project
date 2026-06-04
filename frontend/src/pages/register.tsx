@@ -14,7 +14,6 @@ export default function Register() {
     lastName: '',
     email: '',
     login: '',
-    group: '',
     password: '',
     confirmPassword: '',
     code: ''
@@ -38,7 +37,7 @@ export default function Register() {
     setError('')
 
     if (!formData.firstName || !formData.lastName || !formData.email ||
-        !formData.login || !formData.group || !formData.password) {
+        !formData.login || !formData.password) {
       setError('Заполните все поля')
       return
     }
@@ -64,7 +63,6 @@ export default function Register() {
           firstName: formData.firstName,
           lastName: formData.lastName,
           login: formData.login,
-          group: formData.group,
           code: formData.code,
         }),
       });
@@ -139,15 +137,6 @@ export default function Register() {
           name="login"
           placeholder="Логин"
           value={formData.login}
-          onChange={handleChange}
-          className="form-input"
-        />
-
-        <input
-          type="text"
-          name="group"
-          placeholder="Группа (например, ИС-2024)"
-          value={formData.group}
           onChange={handleChange}
           className="form-input"
         />

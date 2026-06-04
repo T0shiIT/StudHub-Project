@@ -32,6 +32,7 @@ import java.util.*;
 public class AuthController {
 
     private static final Logger log = LoggerFactory.getLogger(AuthController.class);
+    private static final String DEFAULT_GROUP_NAME = "—";
 
     private final PasswordEncoder passwordEncoder;
     private final SecurityContextRepository securityContextRepository;
@@ -95,7 +96,7 @@ public class AuthController {
         newUser.setPasswordHash(passwordEncoder.encode(body.getPassword()));
         newUser.setFirstName(body.getFirstName().trim());
         newUser.setLastName(body.getLastName().trim());
-        newUser.setGroupName(body.getGroup().trim());
+        newUser.setGroupName(DEFAULT_GROUP_NAME);
         newUser.setRole(bypassVerification ? "ADMIN" : "STUDENT");
         
         userRepository.save(newUser);
