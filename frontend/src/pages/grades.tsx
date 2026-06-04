@@ -2,39 +2,38 @@ import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
 import type { JournalData, UserRole } from '../types/journal';
 
-// Используем относительные пути. Браузер сам подставит правильный хост и порт (будь то Vite или Nginx)
 const GRADES_URL = '/api/grades';
 const GRADES_UPLOAD_URL = '/api/grades/upload';
 
 const getGradeColor = (grade: number | null): string => {
-  if (grade === 5 || grade === 4) return '#fce7f3'; // pink-100
-  if (grade === 3) return '#fbcfe8'; // pink-200
-  if (grade === 2) return '#f9a8d4'; // pink-300
-  return '#f3e8ff'; // purple-100
+  if (grade === 5 || grade === 4) return '#fce7f3';
+  if (grade === 3) return '#fbcfe8';
+  if (grade === 2) return '#f9a8d4';
+  return '#f3e8ff';
 };
 
 const getGradeTextColor = (grade: number | null): string => {
-  if (grade === 5 || grade === 4) return '#be185d'; // pink-700
-  if (grade === 3) return '#9d174d'; // pink-800
-  if (grade === 2) return '#831843'; // pink-900
-  return '#6b21a8'; // purple-800
+  if (grade === 5 || grade === 4) return '#be185d';
+  if (grade === 3) return '#9d174d';
+  if (grade === 2) return '#831843';
+  return '#6b21a8';
 };
 
 export default function Grades() {
   const { user, isAuthenticated } = useAuth();
   const role: UserRole = (user?.role as UserRole) || 'STUDENT';
+
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
   const [journal, setJournal] = useState<JournalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadMsg, setUploadMsg] = useState('');
+
   const [editingCell, setEditingCell] = useState<{ studentId: number; date: string; gradeId?: number } | null>(null);
   const [tempGrade, setTempGrade] = useState('');
   const [savingCell, setSavingCell] = useState<{ studentId: number; date: string } | null>(null);
 
-  // Надежная обертка для fetch, которая гарантирует отправку куки (JSESSIONID) и CSRF-токена
   const apiFetch = async (url: string, options: RequestInit = {}) => {
     const csrfToken = document.cookie
       .split('; ')
@@ -45,10 +44,9 @@ export default function Grades() {
 
     return await fetch(url, {
       ...options,
-      credentials: 'include', // КРИТИЧЕСКИ ВАЖНО для Spring Security
+      credentials: 'include',
       headers: {
         'Accept': 'application/json',
-        // Не устанавливаем Content-Type для FormData, браузер сам добавит boundary
         ...(!isFormData && options.method !== 'GET' && { 'Content-Type': 'application/json' }),
         ...(csrfToken && { 'X-XSRF-TOKEN': csrfToken }),
         ...options.headers,
@@ -58,23 +56,24 @@ export default function Grades() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    
+
     const fetchJournal = async () => {
       try {
         setLoading(true);
         setError('');
+
         const params = new URLSearchParams();
         if ((role === 'TEACHER' || role === 'ADMIN') && user?.groupName) {
           params.set('group', user.groupName);
         }
-        
+
         const res = await apiFetch(`${GRADES_URL}?${params.toString()}`);
-        
+
         if (!res.ok) {
           const errorData: { error?: string } = await res.json().catch(() => ({}));
           throw new Error(errorData.error || `Ошибка сервера: ${res.status}`);
         }
-        
+
         const data: Array<{
           id: number;
           studentId: number;
@@ -128,18 +127,17 @@ export default function Grades() {
   const saveGrade = async (studentId: number, date: string) => {
     if (!editingCell) return;
     const newGrade = parseInt(tempGrade, 10);
-    
+
     if (isNaN(newGrade) || newGrade < 2 || newGrade > 5) {
       alert('Разрешены только оценки от 2 до 5');
       return;
     }
 
     setSavingCell({ studentId, date });
+
     try {
       const { gradeId } = editingCell;
-      
       if (gradeId) {
-        // Обновление существующей оценки
         const res = await apiFetch(`${GRADES_URL}/${gradeId}`, {
           method: 'PATCH',
           body: JSON.stringify({ grade: String(newGrade) }),
@@ -149,12 +147,11 @@ export default function Grades() {
           throw new Error(errorData.error || 'Не удалось обновить оценку');
         }
       } else {
-        // Создание новой оценки (для пустой ячейки)
         const res = await apiFetch(GRADES_URL, {
           method: 'POST',
           body: JSON.stringify({
             studentId,
-            subject: 'Основной предмет', // Можно сделать динамическим в будущем
+            subject: 'Основной предмет',
             grade: String(newGrade),
             date,
           }),
@@ -190,16 +187,18 @@ export default function Grades() {
 
     setUploading(true);
     setUploadMsg('');
+
     try {
       const formData = new FormData();
       formData.append('file', file);
 
       const res = await apiFetch(GRADES_UPLOAD_URL, {
         method: 'POST',
-        body: formData, // apiFetch автоматически обработает заголовки для FormData
+        body: formData,
       });
 
       const result: { processed?: number; failed?: number; error?: string } = await res.json();
+
       if (!res.ok) {
         throw new Error(result.error || 'Ошибка загрузки');
       }
@@ -215,9 +214,6 @@ export default function Grades() {
     }
   };
 
-  // ==========================================
-  // ДИЗАЙН И JSX ОСТАВЛЕНЫ БЕЗ ИЗМЕНЕНИЙ
-  // ==========================================
   if (!isAuthenticated) {
     return (
       <div className="schedule-empty-state">
@@ -244,19 +240,9 @@ export default function Grades() {
     );
   }
 
-  if (!journal || journal.students.length === 0) {
-    return (
-      <div className="schedule-empty-state">
-        <div className="schedule-empty-state__icon">📊</div>
-        <h3>Журнал пуст</h3>
-        <p>Данные не найдены или журнал ещё не заполнен.</p>
-      </div>
-    );
-  }
-
+  // ✅ ИСПРАВЛЕНО: Кнопка загрузки теперь рендерится ВСЕГДА для ADMIN/TEACHER, даже если журнал пуст
   return (
     <div className="schedule-page">
-      {/* Hero Section */}
       <section className="schedule-hero">
         <div>
           <span className="schedule-eyebrow">Успеваемость</span>
@@ -264,7 +250,7 @@ export default function Grades() {
           <p>Просматривайте и редактируйте оценки студентов.</p>
         </div>
         <div className="schedule-hero-actions">
-          {role === 'ADMIN' && (
+          {(role === 'ADMIN' || role === 'TEACHER') && (
             <button
               className="schedule-upload-btn"
               onClick={() => fileInputRef.current?.click()}
@@ -296,106 +282,119 @@ export default function Grades() {
         </div>
       )}
 
-      {/* Main Content */}
-      <section className="schedule-card">
-        <div className="schedule-toolbar">
-          <div className="schedule-file-info">
-            <span>Журнал</span>
-            <strong>Основной предмет</strong>
-            <small>{journal.students.length} студентов • {journal.dates.length} дат</small>
-          </div>
-          <div className="schedule-controls">
-            <span className="schedule-role-badge">
-              Роль: <strong>{role === 'STUDENT' ? 'Студент' : role === 'TEACHER' ? 'Преподаватель' : 'Администратор'}</strong>
-            </span>
-          </div>
+      {/* Если журнал пуст — показываем пустое состояние, но кнопка уже отрендерена выше */}
+      {!journal || journal.students.length === 0 ? (
+        <div className="schedule-empty-state">
+          <div className="schedule-empty-state__icon">📊</div>
+          <h3>Журнал пуст</h3>
+          <p>Данные не найдены или журнал ещё не заполнен.</p>
+          {(role === 'ADMIN' || role === 'TEACHER') && (
+            <p style={{ marginTop: '12px', fontSize: '14px', color: '#6b7280' }}>
+              Используйте кнопку <strong>"Загрузить Excel"</strong> выше, чтобы добавить оценки.
+            </p>
+          )}
         </div>
+      ) : (
+        <section className="schedule-card">
+          <div className="schedule-toolbar">
+            <div className="schedule-file-info">
+              <span>Журнал</span>
+              <strong>Основной предмет</strong>
+              <small>{journal.students.length} студентов • {journal.dates.length} дат</small>
+            </div>
+            <div className="schedule-controls">
+              <span className="schedule-role-badge">
+                Роль: <strong>{role === 'STUDENT' ? 'Студент' : role === 'TEACHER' ? 'Преподаватель' : 'Администратор'}</strong>
+              </span>
+            </div>
+          </div>
 
-        <div className="grades-table-container">
-          <table className="grades-table">
-            <thead>
-              <tr className="grades-table__header-row">
-                <th className="grades-table__header grades-table__student-column">
-                  <div>
-                    <span className="grades-table__header-eyebrow">Список</span>
-                    <h3>Студент</h3>
-                  </div>
-                </th>
-                {journal.dates.map((date) => (
-                  <th key={date} className="grades-table__header">
+          <div className="grades-table-container">
+            <table className="grades-table">
+              <thead>
+                <tr className="grades-table__header-row">
+                  <th className="grades-table__header grades-table__student-column">
                     <div>
-                      <span className="grades-table__header-eyebrow">Дата</span>
-                      <h4>{new Date(date).toLocaleDateString('ru-RU')}</h4>
+                      <span className="grades-table__header-eyebrow">Список</span>
+                      <h3>Студент</h3>
                     </div>
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {journal.students.map((student) => (
-                <tr key={student.id} className="grades-table__row">
-                  <td className="grades-table__cell grades-table__student-cell">
-                    <div>
-                      <strong>{student.lastName} {student.firstName}</strong>
-                      <small>ID: {student.id}</small>
-                    </div>
-                  </td>
-                  {journal.dates.map((date) => {
-                    const grade = journal.grades[student.id]?.[date] ?? null;
-                    const isEditing = editingCell?.studentId === student.id && editingCell.date === date;
-                    const isSaving = savingCell?.studentId === student.id && savingCell.date === date;
-
-                    return (
-                      <td
-                        key={date}
-                        className="grades-table__cell grades-table__grade-cell"
-                        style={{
-                          background: getGradeColor(grade),
-                          cursor: (role === 'TEACHER' || role === 'ADMIN') ? 'pointer' : 'default',
-                        }}
-                        onClick={() => !isEditing && (role === 'TEACHER' || role === 'ADMIN') && startEditing(student.id, date, grade)}
-                      >
-                        {isSaving ? (
-                          <span className="grades-table__saving">...</span>
-                        ) : isEditing ? (
-                          <input
-                            type="number"
-                            min="2"
-                            max="5"
-                            value={tempGrade}
-                            onChange={(e) => setTempGrade(e.target.value)}
-                            onBlur={() => saveGrade(student.id, date)}
-                            onKeyDown={(e) => e.key === 'Enter' && saveGrade(student.id, date)}
-                            autoFocus
-                            className="grades-table__input"
-                          />
-                        ) : (
-                          <span
-                            className="grades-table__grade-value"
-                            style={{ color: getGradeTextColor(grade) }}
-                          >
-                            {grade !== null ? grade : '—'}
-                          </span>
-                        )}
-                      </td>
-                    );
-                  })}
+                  {journal.dates.map((date) => (
+                    <th key={date} className="grades-table__header">
+                      <div>
+                        <span className="grades-table__header-eyebrow">Дата</span>
+                        <h4>{new Date(date).toLocaleDateString('ru-RU')}</h4>
+                      </div>
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {journal.students.map((student) => (
+                  <tr key={student.id} className="grades-table__row">
+                    <td className="grades-table__cell grades-table__student-cell">
+                      <div>
+                        <strong>{student.lastName} {student.firstName}</strong>
+                        <small>ID: {student.id}</small>
+                      </div>
+                    </td>
+                    {journal.dates.map((date) => {
+                      const grade = journal.grades[student.id]?.[date] ?? null;
+                      const isEditing = editingCell?.studentId === student.id && editingCell.date === date;
+                      const isSaving = savingCell?.studentId === student.id && savingCell.date === date;
 
-        <div className="schedule-empty-state" style={{ marginTop: '24px', background: '#fdf2f8', border: '1px solid #f9a8d4' }}>
-          <div className="schedule-empty-state__icon">💡</div>
-          <h3>Подсказка</h3>
-          <p>
-            {role === 'STUDENT' && 'Режим только для чтения. Редактирование недоступно.'}
-            {role === 'TEACHER' && 'Кликните по любой ячейке, чтобы поставить оценку (2–5).'}
-            {role === 'ADMIN' && 'Вам доступна загрузка Excel-файлов для массового импорта оценок.'}
-          </p>
-        </div>
-      </section>
+                      return (
+                        <td
+                          key={date}
+                          className="grades-table__cell grades-table__grade-cell"
+                          style={{
+                            background: getGradeColor(grade),
+                            cursor: (role === 'TEACHER' || role === 'ADMIN') ? 'pointer' : 'default',
+                          }}
+                          onClick={() => !isEditing && (role === 'TEACHER' || role === 'ADMIN') && startEditing(student.id, date, grade)}
+                        >
+                          {isSaving ? (
+                            <span className="grades-table__saving">...</span>
+                          ) : isEditing ? (
+                            <input
+                              type="number"
+                              min="2"
+                              max="5"
+                              value={tempGrade}
+                              onChange={(e) => setTempGrade(e.target.value)}
+                              onBlur={() => saveGrade(student.id, date)}
+                              onKeyDown={(e) => e.key === 'Enter' && saveGrade(student.id, date)}
+                              autoFocus
+                              className="grades-table__input"
+                            />
+                          ) : (
+                            <span
+                              className="grades-table__grade-value"
+                              style={{ color: getGradeTextColor(grade) }}
+                            >
+                              {grade !== null ? grade : '—'}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="schedule-empty-state" style={{ marginTop: '24px', background: '#fdf2f8', border: '1px solid #f9a8d4' }}>
+            <div className="schedule-empty-state__icon">💡</div>
+            <h3>Подсказка</h3>
+            <p>
+              {role === 'STUDENT' && 'Режим только для чтения. Редактирование недоступно.'}
+              {role === 'TEACHER' && 'Кликните по ячейке для оценки, или используйте кнопку "Загрузить Excel" для массового импорта.'}
+              {role === 'ADMIN' && 'Вам доступно редактирование и загрузка Excel-файлов для массового импорта оценок.'}
+            </p>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
