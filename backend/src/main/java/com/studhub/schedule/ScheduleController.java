@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.studhub.auth.CppUserClient;
+import com.studhub.notification.NotificationService;
 import com.studhub.user.User;
 import com.studhub.user.UserRepository;
 import org.springframework.http.MediaType;
@@ -15,13 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -55,15 +50,18 @@ public class ScheduleController {
     private final ScheduleParserClient scheduleParserClient;
     private final UserRepository userRepository;
     private final ScheduleUploadRepository scheduleUploadRepository;
+    private final NotificationService notificationService;   // ← NEW
 
     public ScheduleController(CppUserClient cppUserClient,
                               ScheduleParserClient scheduleParserClient,
                               UserRepository userRepository,
-                              ScheduleUploadRepository scheduleUploadRepository) {
+                              ScheduleUploadRepository scheduleUploadRepository,
+                              NotificationService notificationService) {        // ← NEW
         this.cppUserClient = cppUserClient;
         this.scheduleParserClient = scheduleParserClient;
         this.userRepository = userRepository;
         this.scheduleUploadRepository = scheduleUploadRepository;
+        this.notificationService = notificationService;    // ← NEW
     }
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -78,7 +76,6 @@ public class ScheduleController {
             return ResponseEntity.status(401).body(Map.of("error", "Пользователь не найден"));
         }
 
-        // В методе uploadSchedule, после получения currentUser:
         System.out.println("====== DEBUG SCHEDULE UPLOAD ======");
         System.out.println("Email из сессии: " + authentication.getName());
         System.out.println("Email из БД: " + currentUser.getEmail());
@@ -100,7 +97,6 @@ public class ScheduleController {
                     .body(Map.of("error", "Поддерживаются форматы: .xlsx, .xlsm, .xlsb, .xls"));
         }
 
-        // Парсим Excel в JSON-строку
         String scheduleJson;
         try {
             scheduleJson = scheduleParserClient.parseToJson(file);
@@ -134,7 +130,10 @@ public class ScheduleController {
             return ResponseEntity.status(saveResult.status()).body(saveResult.body());
         }
 
-        // Ответ: сообщение + JSON расписания
+        // ── Уведомление всем об обновлении расписания ────────────────────────
+        notificationService.notifyScheduleUpdate(scheduleFileName, currentUser.getEmail());
+        // ─────────────────────────────────────────────────────────────────────
+
         Map<String, Object> responseBody = new LinkedHashMap<>();
         responseBody.put("message", "Расписание успешно загружено");
         responseBody.put("id", saveResult.body().get("id"));
@@ -190,6 +189,8 @@ public class ScheduleController {
         CppUserClient.Result result = cppUserClient.latestSchedule(currentUser.getId());
         return ResponseEntity.status(result.status()).body(result.body());
     }
+
+    // ── private helpers (без изменений) ────────────────────────────────────────
 
     private String buildScheduleFileName(JsonNode scheduleData) {
         Set<String> groupNames = collapseGroupDirections(extractGroupNames(scheduleData));
@@ -249,15 +250,8 @@ public class ScheduleController {
     }
 
     private void collectGroupNames(JsonNode node, Set<String> groupNames) {
-        if (node == null || node.isNull()) {
-            return;
-        }
-
-        if (node.isTextual()) {
-            addGroupNames(node.asText(), groupNames);
-            return;
-        }
-
+        if (node == null || node.isNull()) return;
+        if (node.isTextual()) { addGroupNames(node.asText(), groupNames); return; }
         if (node.isContainerNode()) {
             node.elements().forEachRemaining(child -> collectGroupNames(child, groupNames));
         }
@@ -267,9 +261,7 @@ public class ScheduleController {
         Matcher matcher = GROUP_VALUE_PATTERN.matcher(value);
         while (matcher.find()) {
             String groupName = normalizeGroupName(matcher.group(1));
-            if (!groupName.isBlank()) {
-                groupNames.add(groupName);
-            }
+            if (!groupName.isBlank()) groupNames.add(groupName);
         }
     }
 
@@ -291,10 +283,9 @@ public class ScheduleController {
     }
 
     private String limitFileNamePart(String value) {
-        if (value.length() <= MAX_GROUPS_FILE_NAME_PART_LENGTH) {
-            return value;
-        }
-        return value.substring(0, MAX_GROUPS_FILE_NAME_PART_LENGTH);
+        return value.length() <= MAX_GROUPS_FILE_NAME_PART_LENGTH
+                ? value
+                : value.substring(0, MAX_GROUPS_FILE_NAME_PART_LENGTH);
     }
 
     private JsonNode withScheduleFileName(JsonNode scheduleData, String scheduleFileName) {
@@ -307,9 +298,7 @@ public class ScheduleController {
     }
 
     private Optional<User> requireCurrentUser(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return Optional.empty();
-        }
+        if (authentication == null || !authentication.isAuthenticated()) return Optional.empty();
         return resolveCurrentUser(authentication);
     }
 
@@ -340,18 +329,11 @@ public class ScheduleController {
         Object principal = authentication.getPrincipal();
         if (principal instanceof OAuth2User oAuth2User) {
             String email = stringAttribute(oAuth2User, DEFAULT_EMAIL_ATTRIBUTE);
-            if (email == null || email.isBlank()) {
-                email = stringAttribute(oAuth2User, EMAIL_ATTRIBUTE);
-            }
-            if (email != null && !email.isBlank()) {
-                return userRepository.findByEmail(email.toLowerCase());
-            }
+            if (email == null || email.isBlank()) email = stringAttribute(oAuth2User, EMAIL_ATTRIBUTE);
+            if (email != null && !email.isBlank()) return userRepository.findByEmail(email.toLowerCase());
         }
-
         String identifier = authentication.getName();
-        if (identifier == null || identifier.isBlank()) {
-            return Optional.empty();
-        }
+        if (identifier == null || identifier.isBlank()) return Optional.empty();
         return userRepository.findByEmail(identifier.toLowerCase())
                 .or(() -> userRepository.findByLogin(identifier));
     }
@@ -363,9 +345,6 @@ public class ScheduleController {
 
     private String extractExtension(String fileName) {
         int idx = fileName.lastIndexOf('.');
-        if (idx == -1) {
-            return "";
-        }
-        return fileName.substring(idx).toLowerCase();
+        return idx == -1 ? "" : fileName.substring(idx).toLowerCase();
     }
 }

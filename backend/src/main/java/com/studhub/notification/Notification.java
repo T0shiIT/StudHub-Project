@@ -44,6 +44,7 @@ public class Notification {
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; }
     public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; } // добавлен сеттер
     public boolean isRead() { return read; }
     public void setRead(boolean read) { this.read = read; }
     public String getType() { return type; }

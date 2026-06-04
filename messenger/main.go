@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"messenger/handlers"
 	"messenger/internal/hub"
@@ -15,6 +16,12 @@ func main() {
 	log.Println("[main] Redis connected")
 
 	h := hub.New()
+
+	// ── Запускаем подписку на Redis Pub/Sub для push-уведомлений ─────────────
+	ctx := context.Background()
+	redisstore.SubscribeNotifications(ctx, h)
+	log.Println("[main] Notification subscriber started")
+	// ─────────────────────────────────────────────────────────────────────────
 
 	mux := http.NewServeMux()
 

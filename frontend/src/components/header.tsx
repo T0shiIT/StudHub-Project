@@ -1,6 +1,8 @@
+// src/components/header.tsx
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { fetchWithCsrf } from '../utils/csrf';
+import NotificationBell from './NotificationBell';
 
 export default function Header() {
   const navigate = useNavigate();
@@ -24,6 +26,9 @@ export default function Header() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         {isAuthenticated ? (
           <>
+            {/* Колокольчик уведомлений */}
+            <NotificationBell />
+
             <span>{user?.login || user?.default_email || 'Пользователь'}</span>
             <button className="btn" onClick={handleLogout} style={{ background: '#ef4444' }}>
               Выйти
