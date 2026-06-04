@@ -39,6 +39,7 @@ public class GradeController {
         this.objectMapper = objectMapper;
     }
 
+    // ======================== ОСНОВНОЙ ЭНДПОИНТ ПОЛУЧЕНИЯ ОЦЕНОК ========================
     @GetMapping
     public ResponseEntity<?> getGrades(@RequestParam(required = false) String group,
                                        @RequestParam(required = false) String subject,
@@ -48,18 +49,44 @@ public class GradeController {
 
         String email = auth.getName();
         User currentUser = userRepository.findByEmail(email)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
         if ("STUDENT".equalsIgnoreCase(currentUser.getRole())) {
             return ResponseEntity.ok(gradeService.getGradesForStudent(currentUser.getId()));
         }
 
+        // Для преподавателя и администратора параметр group обязателен,
+        // но администратору можно вернуть пустой список, если group не передан (чтобы не было ошибки 400)
         if (group == null || group.isBlank()) {
+            if ("ADMIN".equalsIgnoreCase(currentUser.getRole())) {
+                // Можно вернуть пустой список или агрегированные данные по всем группам.
+                // Пока возвращаем пустой список – фронтенд сам подскажет выбрать группу.
+                return ResponseEntity.ok(Collections.emptyList());
+            }
             return ResponseEntity.badRequest().body(Map.of("error", "Parameter 'group' is required for teacher/admin"));
         }
         return ResponseEntity.ok(gradeService.getGradesForGroup(group, subject));
     }
 
+    // ======================== НОВЫЙ ЭНДПОИНТ: СПИСОК ГРУПП ========================
+    @GetMapping("/groups")
+    public ResponseEntity<?> getAvailableGroups(Authentication auth) {
+        if (auth == null || !auth.isAuthenticated()) {
+            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
+        }
+        String email = auth.getName();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (!"TEACHER".equalsIgnoreCase(user.getRole()) && !"ADMIN".equalsIgnoreCase(user.getRole())) {
+            return ResponseEntity.status(403).body(Map.of("error", "Forbidden"));
+        }
+
+        List<String> groups = userRepository.findDistinctGroupNames();
+        return ResponseEntity.ok(groups);
+    }
+
+    // ======================== ОБНОВЛЕНИЕ ОЦЕНКИ ========================
     @PatchMapping("/{gradeId}")
     public ResponseEntity<?> updateGrade(@PathVariable Long gradeId,
                                          @Valid @RequestBody UpdateGradeRequest request,
@@ -69,7 +96,7 @@ public class GradeController {
 
         String email = auth.getName();
         User teacher = userRepository.findByEmail(email)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (!"TEACHER".equalsIgnoreCase(teacher.getRole()) && !"ADMIN".equalsIgnoreCase(teacher.getRole())) {
             return ResponseEntity.status(403).body(Map.of("error", "Insufficient permissions"));
@@ -82,7 +109,7 @@ public class GradeController {
         }
     }
 
-    // НОВОЕ: создание новой оценки (для пустой ячейки)
+    // ======================== СОЗДАНИЕ НОВОЙ ОЦЕНКИ ========================
     @PostMapping
     public ResponseEntity<?> createGrade(@Valid @RequestBody CreateGradeRequest request,
                                          Authentication auth) {
@@ -92,7 +119,7 @@ public class GradeController {
 
         String email = auth.getName();
         User teacher = userRepository.findByEmail(email)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (!"TEACHER".equalsIgnoreCase(teacher.getRole()) && !"ADMIN".equalsIgnoreCase(teacher.getRole())) {
             return ResponseEntity.status(403).body(Map.of("error", "Only teachers and admins can create grades"));
@@ -106,6 +133,7 @@ public class GradeController {
         }
     }
 
+    // ======================== ЗАГРУЗКА ОЦЕНОК ИЗ EXCEL ========================
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> uploadGrades(@RequestParam("file") MultipartFile file, Authentication auth) {
         if (auth == null || !auth.isAuthenticated())
@@ -113,7 +141,7 @@ public class GradeController {
 
         String email = auth.getName();
         User teacher = userRepository.findByEmail(email)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (!"TEACHER".equalsIgnoreCase(teacher.getRole()) && !"ADMIN".equalsIgnoreCase(teacher.getRole())) {
             return ResponseEntity.status(403).body(Map.of("error", "Only teachers and admins can upload grades"));

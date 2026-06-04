@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { fetchWithCsrf } from '../utils/csrf';
 import type { JournalData, UserRole } from '../types/journal';
 
-const API_BASE_URL = 'http://localhost:8080';
-const GRADES_URL = `${API_BASE_URL}/api/grades`;
-const GRADES_UPLOAD_URL = `${API_BASE_URL}/api/grades/upload`;
+// Используем относительные пути. Браузер сам подставит правильный хост и порт (будь то Vite или Nginx)
+const GRADES_URL = '/api/grades';
+const GRADES_UPLOAD_URL = '/api/grades/upload';
 
 const getGradeColor = (grade: number | null): string => {
   if (grade === 5 || grade === 4) return '#fce7f3'; // pink-100
@@ -24,8 +23,8 @@ const getGradeTextColor = (grade: number | null): string => {
 export default function Grades() {
   const { user, isAuthenticated } = useAuth();
   const role: UserRole = (user?.role as UserRole) || 'STUDENT';
-  
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const [journal, setJournal] = useState<JournalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -35,26 +34,47 @@ export default function Grades() {
   const [tempGrade, setTempGrade] = useState('');
   const [savingCell, setSavingCell] = useState<{ studentId: number; date: string } | null>(null);
 
+  // Надежная обертка для fetch, которая гарантирует отправку куки (JSESSIONID) и CSRF-токена
+  const apiFetch = async (url: string, options: RequestInit = {}) => {
+    const csrfToken = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('XSRF-TOKEN='))
+      ?.split('=')[1];
+
+    const isFormData = options.body instanceof FormData;
+
+    return await fetch(url, {
+      ...options,
+      credentials: 'include', // КРИТИЧЕСКИ ВАЖНО для Spring Security
+      headers: {
+        'Accept': 'application/json',
+        // Не устанавливаем Content-Type для FormData, браузер сам добавит boundary
+        ...(!isFormData && options.method !== 'GET' && { 'Content-Type': 'application/json' }),
+        ...(csrfToken && { 'X-XSRF-TOKEN': csrfToken }),
+        ...options.headers,
+      },
+    });
+  };
+
   useEffect(() => {
     if (!isAuthenticated) return;
-
+    
     const fetchJournal = async () => {
       try {
         setLoading(true);
         setError('');
-        
         const params = new URLSearchParams();
         if ((role === 'TEACHER' || role === 'ADMIN') && user?.groupName) {
           params.set('group', user.groupName);
         }
-
-        const res = await fetchWithCsrf(`${GRADES_URL}?${params.toString()}`);
+        
+        const res = await apiFetch(`${GRADES_URL}?${params.toString()}`);
         
         if (!res.ok) {
           const errorData: { error?: string } = await res.json().catch(() => ({}));
-          throw new Error(errorData.error || 'Не удалось загрузить журнал');
+          throw new Error(errorData.error || `Ошибка сервера: ${res.status}`);
         }
-
+        
         const data: Array<{
           id: number;
           studentId: number;
@@ -100,15 +120,15 @@ export default function Grades() {
   }, [isAuthenticated, role, user?.groupName]);
 
   const startEditing = (studentId: number, date: string, currentGrade: number | null, gradeId?: number) => {
-    if (role !== 'TEACHER') return;
+    if (role !== 'TEACHER' && role !== 'ADMIN') return;
     setEditingCell({ studentId, date, gradeId });
     setTempGrade(currentGrade !== null ? String(currentGrade) : '');
   };
 
   const saveGrade = async (studentId: number, date: string) => {
     if (!editingCell) return;
-    
     const newGrade = parseInt(tempGrade, 10);
+    
     if (isNaN(newGrade) || newGrade < 2 || newGrade > 5) {
       alert('Разрешены только оценки от 2 до 5');
       return;
@@ -117,30 +137,28 @@ export default function Grades() {
     setSavingCell({ studentId, date });
     try {
       const { gradeId } = editingCell;
-
+      
       if (gradeId) {
-        const res = await fetchWithCsrf(`${GRADES_URL}/${gradeId}`, {
+        // Обновление существующей оценки
+        const res = await apiFetch(`${GRADES_URL}/${gradeId}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ grade: String(newGrade) }),
         });
-        
         if (!res.ok) {
           const errorData: { error?: string } = await res.json().catch(() => ({}));
           throw new Error(errorData.error || 'Не удалось обновить оценку');
         }
       } else {
-        const res = await fetchWithCsrf(GRADES_URL, {
+        // Создание новой оценки (для пустой ячейки)
+        const res = await apiFetch(GRADES_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             studentId,
-            subject: 'Основной предмет',
+            subject: 'Основной предмет', // Можно сделать динамическим в будущем
             grade: String(newGrade),
             date,
           }),
         });
-        
         if (!res.ok) {
           const errorData: { error?: string } = await res.json().catch(() => ({}));
           throw new Error(errorData.error || 'Не удалось создать оценку');
@@ -176,28 +194,30 @@ export default function Grades() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await fetchWithCsrf(GRADES_UPLOAD_URL, {
+      const res = await apiFetch(GRADES_UPLOAD_URL, {
         method: 'POST',
-        body: formData,
+        body: formData, // apiFetch автоматически обработает заголовки для FormData
       });
 
       const result: { processed?: number; failed?: number; error?: string } = await res.json();
-      
       if (!res.ok) {
         throw new Error(result.error || 'Ошибка загрузки');
       }
 
-      setUploadMsg(`Успешно: ${result.processed}, Ошибок: ${result.failed}`);
+      setUploadMsg(`Успешно: ${result.processed || 0}, Ошибок: ${result.failed || 0}`);
       setTimeout(() => window.location.reload(), 1500);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Ошибка загрузки файла';
       setUploadMsg(errorMessage);
     } finally {
       setUploading(false);
+      if (e.target) e.target.value = '';
     }
-    e.target.value = '';
   };
 
+  // ==========================================
+  // ДИЗАЙН И JSX ОСТАВЛЕНЫ БЕЗ ИЗМЕНЕНИЙ
+  // ==========================================
   if (!isAuthenticated) {
     return (
       <div className="schedule-empty-state">
@@ -331,9 +351,9 @@ export default function Grades() {
                         className="grades-table__cell grades-table__grade-cell"
                         style={{
                           background: getGradeColor(grade),
-                          cursor: role === 'TEACHER' ? 'pointer' : 'default',
+                          cursor: (role === 'TEACHER' || role === 'ADMIN') ? 'pointer' : 'default',
                         }}
-                        onClick={() => !isEditing && role === 'TEACHER' && startEditing(student.id, date, grade)}
+                        onClick={() => !isEditing && (role === 'TEACHER' || role === 'ADMIN') && startEditing(student.id, date, grade)}
                       >
                         {isSaving ? (
                           <span className="grades-table__saving">...</span>
@@ -350,7 +370,7 @@ export default function Grades() {
                             className="grades-table__input"
                           />
                         ) : (
-                          <span 
+                          <span
                             className="grades-table__grade-value"
                             style={{ color: getGradeTextColor(grade) }}
                           >
@@ -377,5 +397,5 @@ export default function Grades() {
         </div>
       </section>
     </div>
-      );
+  );
 }
