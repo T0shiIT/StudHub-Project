@@ -1,0 +1,27 @@
+/*
+  Добавьте эти стили в файл, где описан .sidebar
+  (обычно src/index.css или компонентный CSS сайдбара).
+*/
+
+/* Ссылка в сайдбаре должна быть flex, чтобы бейдж встал справа */
+.sidebar a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-unread-badge {
+  background: #2563eb;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 10px;
+  min-width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  margin-left: 6px;
+  flex-shrink: 0;
+}

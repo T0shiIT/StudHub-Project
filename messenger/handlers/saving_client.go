@@ -2,19 +2,17 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"messenger/internal/client"
+	"messenger/internal/dm"
 	redisstore "messenger/internal/redis"
 	"messenger/internal/room"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-// savingClient оборачивает client.Client и перехватывает Send,
-// чтобы сохранять входящие сообщения в Redis.
-// Сохранение происходит в readPump через кастомный broadcast.
 type savingClient struct {
 	*client.Client
 }
@@ -25,44 +23,42 @@ func newSavingClient(userID int64, login string, r *room.Room, conn *websocket.C
 	}
 }
 
-// обёртка над room.Room, которая сохраняет в Redis при Broadcast.
+// savingRoom оборачивает room.Room: при Broadcast сохраняет сообщение в Redis
+// и инкрементирует счётчики непрочитанных для всех участников DM-комнаты,
+// кроме отправителя.
 type savingRoom struct {
 	*room.Room
 }
 
 func (sr *savingRoom) Broadcast(m room.Message) {
-	//Сохраняем в Redis асинхронно
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
+
+		// 1. Сохранить сообщение в историю.
 		if err := redisstore.SaveMessage(ctx, m); err != nil {
 			log.Printf("[redis] save message error: %v", err)
 		}
+
+		// 2. Для DM-комнат инкрементировать счётчик непрочитанных получателя.
+		if strings.HasPrefix(m.RoomID, "dm-") {
+			idA, idB, ok := dm.ParseDMRoom(m.RoomID)
+			if ok {
+				// Получатель — тот участник, который НЕ является отправителем.
+				recipientID := idB
+				if m.SenderID == idB {
+					recipientID = idA
+				}
+				if err := redisstore.IncrUnread(ctx, m.RoomID, recipientID); err != nil {
+					log.Printf("[redis] incr unread error: %v", err)
+				}
+			}
+		}
 	}()
+
 	sr.Room.Broadcast(m)
 }
 
-// incomingWrap читает WS и пишет в savingRoom
 func (sc *savingClient) Run() {
 	sc.Client.Run()
-}
-
-// parseAndSave хелпер для ручного сохранения если нужно из теста.
-func parseAndSave(raw []byte, roomID string, userID int64, login string) {
-	var inc struct {
-		Text string `json:"text"`
-	}
-	if err := json.Unmarshal(raw, &inc); err != nil || inc.Text == "" {
-		return
-	}
-	msg := room.Message{
-		RoomID:   roomID,
-		SenderID: userID,
-		Login:    login,
-		Text:     inc.Text,
-		SentAt:   time.Now().UnixMilli(),
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	_ = redisstore.SaveMessage(ctx, msg)
 }

@@ -10,12 +10,13 @@ import (
 	"time"
 )
 
-// UserInfo данные пользователя из Java-бэкенда.
 type UserInfo struct {
 	ID        int64  `json:"id"`
 	Login     string `json:"login"`
 	Email     string `json:"email"`
 	Role      string `json:"role"`
+	FirstName string `json:"firstName"`
+	LastName  string `json:"lastName"`
 	IsBlocked bool   `json:"is_blocked"`
 }
 
@@ -29,7 +30,7 @@ func javaBaseURL() string {
 	return strings.TrimRight(u, "/")
 }
 
-// ParseToken принимает токен формата "userID:login" (выданный /api/internal/chat-token).
+// ParseToken parses a simple "userID:login" token.
 func ParseToken(tokenStr string) (int64, string, error) {
 	parts := strings.SplitN(tokenStr, ":", 2)
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
@@ -42,7 +43,6 @@ func ParseToken(tokenStr string) (int64, string, error) {
 	return id, parts[1], nil
 }
 
-// GetUser запрашивает данные пользователя у Java по email.
 func GetUser(email string) (*UserInfo, error) {
 	url := fmt.Sprintf("%s/api/internal/user?email=%s", javaBaseURL(), email)
 	resp, err := httpClient.Get(url)
@@ -65,9 +65,8 @@ func GetUser(email string) (*UserInfo, error) {
 	return &u, nil
 }
 
-// GetUserByID запрашивает данные пользователя по ID.
 func GetUserByID(userID int64) (*UserInfo, error) {
-	url := fmt.Sprintf("%s/api/internal/user-by-id?id=%d", javaBaseURL(), userID)
+	url := fmt.Sprintf("%s/api/internal/user/%d", javaBaseURL(), userID)
 	resp, err := httpClient.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("java request failed: %w", err)

@@ -6,34 +6,28 @@ import (
 	"messenger/internal/hub"
 	redisstore "messenger/internal/redis"
 	"net/http"
-	"os"
 )
 
 func main() {
-	// Инициализируем Redis
 	redisstore.Init()
-	log.Println("[main] Redis connected")
 
 	h := hub.New()
 
 	mux := http.NewServeMux()
 
-	// WebSocket: GET /ws/{roomID}?token=...
+	// WebSocket – handles both group rooms and DM rooms (dm-{a}-{b}).
 	mux.HandleFunc("/ws/", handlers.WSHandler(h))
 
-	// История комнаты: GET /history/{roomID}?token=...&limit=50
+	// REST
 	mux.HandleFunc("/history/", handlers.HistoryHandler)
-
-	// Healthcheck: GET /health
 	mux.HandleFunc("/health", handlers.HealthHandler)
 
-	port := os.Getenv("CHAT_PORT")
-	if port == "" {
-		port = "9000"
-	}
+	// DM / Dialogs
+	mux.HandleFunc("/api/dialogs", handlers.DialogsHandler)
+	mux.HandleFunc("/api/dialogs/", handlers.MarkReadHandler) // POST /api/dialogs/{roomID}/read
 
-	log.Printf("[main] chat service listening on :%s", port)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
-		log.Fatalf("[main] server error: %v", err)
+	log.Println("[messenger] listening on :9000")
+	if err := http.ListenAndServe(":9000", mux); err != nil {
+		log.Fatal(err)
 	}
 }

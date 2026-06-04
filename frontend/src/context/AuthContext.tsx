@@ -16,11 +16,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkAuth = async () => {
     try {
-      // Гарантируем наличие CSRF-токена перед любыми запросами
       await ensureCsrfToken();
-
-      const response = await fetchWithCsrf('http://localhost:8080/api/user');
-
+      // Относительный путь — nginx проксирует на backend:8080
+      const response = await fetchWithCsrf('/api/user');
       if (response.ok) {
         const data = await response.json();
         if (data && !data.error) {

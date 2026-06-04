@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"messenger/internal/auth"
+	"messenger/internal/dm"
 	"messenger/internal/hub"
 	redisstore "messenger/internal/redis"
 	"messenger/internal/room"
@@ -18,79 +19,108 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		//!!!!!в проде заменить на проверку Origin
+		// TODO: заменить на проверку Origin в проде
 		return true
 	},
 }
 
-// WSHandler обрабатывает GET /ws/{roomID}
-// Ожидает JWT в query-параметре ?token=... или в заголовке Authorization: Bearer ...
+// WSHandler handles GET /ws/{roomID}
 func WSHandler(h *hub.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// 1. Достаём roomID из пути /ws/{roomID}
 		roomID := strings.TrimPrefix(r.URL.Path, "/ws/")
 		if roomID == "" {
 			http.Error(w, "room id required", http.StatusBadRequest)
 			return
 		}
 
-		//получаем jwt
+		// Извлекаем токен: сначала query-param, потом Authorization header.
 		tokenStr := r.URL.Query().Get("token")
 		if tokenStr == "" {
-			bearer := r.Header.Get("Authorization")
-			tokenStr = strings.TrimPrefix(bearer, "Bearer ")
+			tokenStr = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		}
 		if tokenStr == "" {
 			http.Error(w, "token required", http.StatusUnauthorized)
 			return
 		}
 
-		//парсим токен формата "userID:login"
 		userID, login, err := auth.ParseToken(tokenStr)
 		if err != nil {
 			log.Printf("[ws] invalid token: %v", err)
 			http.Error(w, "invalid token", http.StatusUnauthorized)
 			return
 		}
-		log.Printf("[WS CONNECT] room=%s user=%d login=%s",
-			roomID, userID, login)
-		//Проверяем что юзер не заблокирован через Java (опционально, по userID)
-		// Для скорости пропускаем блокировку проверяем при выдаче chat-token на стороне Java
-		_ = login
+		log.Printf("[WS CONNECT] room=%s user=%d login=%s", roomID, userID, login)
 
-		// 5. Апгрейдим соединение до WebSocket
+		// ── DM-авторизация ────────────────────────────────────────────────────
+		if strings.HasPrefix(roomID, "dm-") {
+			if !dm.IsMember(roomID, userID) {
+				log.Printf("[ws] user %d tried to access DM room %s — forbidden", userID, roomID)
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+
+			idA, idB, _ := dm.ParseDMRoom(roomID)
+			otherID := idB
+			if userID == idB {
+				otherID = idA
+			}
+
+			if _, err := auth.GetUserByID(otherID); err != nil {
+				log.Printf("[ws] companion %d not found: %v", otherID, err)
+				http.Error(w, "companion user not found", http.StatusNotFound)
+				return
+			}
+
+			// Регистрируем комнату для обоих участников (идемпотентно).
+			ctx := context.Background()
+			if err := redisstore.RegisterDMRoom(ctx, idA, roomID); err != nil {
+				log.Printf("[ws] RegisterDMRoom idA=%d: %v", idA, err)
+			}
+			if err := redisstore.RegisterDMRoom(ctx, idB, roomID); err != nil {
+				log.Printf("[ws] RegisterDMRoom idB=%d: %v", idB, err)
+			}
+		}
+
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Printf("[ws] upgrade error: %v", err)
 			return
 		}
 
-		//Отправляем историю сообщений из Redis
 		ctx := context.Background()
+
+		// Отправляем историю.
 		history, err := redisstore.GetHistory(ctx, roomID, 50)
 		if err != nil {
 			log.Printf("[ws] history error: %v", err)
 		} else {
 			log.Printf("[ws] sending %d history messages to user %d in room %s",
 				len(history), userID, roomID)
-
 			sendHistory(conn, history)
 		}
 
-		//Отмечаем онлайн
+		// При подключении сбрасываем счётчик непрочитанных (пользователь видит сообщения).
+		if strings.HasPrefix(roomID, "dm-") {
+			if err := redisstore.ResetUnread(ctx, roomID, userID); err != nil {
+				log.Printf("[ws] reset unread error: %v", err)
+			}
+			if last := redisstore.LastMessageOf(ctx, roomID); last != nil {
+				if err := redisstore.SetLastRead(ctx, roomID, userID, last.SentAt); err != nil {
+					log.Printf("[ws] set last read error: %v", err)
+				}
+			}
+		}
+
 		_ = redisstore.SetOnline(ctx, roomID, userID)
 
-		//Регистрируем клиента в комнате
 		rm := h.GetOrCreate(roomID)
 		sc := newSavingClient(userID, login, rm, conn)
 		sc.Run()
 
-		// После отключения — снимаем онлайн
 		_ = redisstore.SetOffline(context.Background(), roomID, userID)
 	}
 }
 
-// sendHistory отправляет историю в обратном порядке (от старых к новым).
 func sendHistory(conn *websocket.Conn, msgs []room.Message) {
 	for i := len(msgs) - 1; i >= 0; i-- {
 		_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
