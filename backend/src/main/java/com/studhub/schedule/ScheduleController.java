@@ -56,13 +56,13 @@ public class ScheduleController {
     private final ScheduleParserClient scheduleParserClient;
     private final UserRepository userRepository;
     private final ScheduleUploadRepository scheduleUploadRepository;
-    private final NotificationService notificationService; // добавлено
+    private final NotificationService notificationService;
 
     public ScheduleController(CppUserClient cppUserClient,
                               ScheduleParserClient scheduleParserClient,
                               UserRepository userRepository,
                               ScheduleUploadRepository scheduleUploadRepository,
-                              NotificationService notificationService) { // добавлен параметр
+                              NotificationService notificationService) {
         this.cppUserClient = cppUserClient;
         this.scheduleParserClient = scheduleParserClient;
         this.userRepository = userRepository;
@@ -82,7 +82,6 @@ public class ScheduleController {
             return ResponseEntity.status(401).body(Map.of("error", "Пользователь не найден"));
         }
 
-        // Отладка
         System.out.println("====== DEBUG SCHEDULE UPLOAD ======");
         System.out.println("Email из сессии: " + authentication.getName());
         System.out.println("Email из БД: " + currentUser.getEmail());
@@ -104,7 +103,6 @@ public class ScheduleController {
                     .body(Map.of("error", "Поддерживаются форматы: .xlsx, .xlsm, .xlsb, .xls"));
         }
 
-        // Парсим Excel в JSON-строку
         String scheduleJson;
         try {
             scheduleJson = scheduleParserClient.parseToJson(file);
@@ -138,16 +136,13 @@ public class ScheduleController {
             return ResponseEntity.status(saveResult.status()).body(saveResult.body());
         }
 
-        // СОЗДАЁМ УВЕДОМЛЕНИЯ ОБ ИЗМЕНЕНИИ РАСПИСАНИЯ
         try {
             notificationService.notifyScheduleUpdate(scheduleFileName, currentUser.getEmail());
             System.out.println(">>> Уведомления об изменении расписания отправлены студентам и преподавателям");
         } catch (Exception e) {
             System.err.println("Ошибка при создании уведомлений: " + e.getMessage());
-            // Не прерываем выполнение, только логируем
         }
 
-        // Ответ: сообщение + JSON расписания
         Map<String, Object> responseBody = new LinkedHashMap<>();
         responseBody.put("message", "Расписание успешно загружено");
         responseBody.put("id", saveResult.body().get("id"));
@@ -187,6 +182,25 @@ public class ScheduleController {
         return scheduleUploadRepository.findById(scheduleId)
                 .<ResponseEntity<?>>map(upload -> ResponseEntity.ok(toScheduleResponse(upload)))
                 .orElseGet(() -> ResponseEntity.status(404).body(Map.of("error", SCHEDULE_NOT_FOUND_MESSAGE)));
+    }
+
+    // ========== НОВЫЙ МЕТОД ДЛЯ УДАЛЕНИЯ РАСПИСАНИЯ ==========
+    @DeleteMapping("/uploads/{scheduleId}")
+    public ResponseEntity<?> deleteSchedule(@PathVariable Long scheduleId,
+                                            Authentication authentication) {
+        Optional<User> currentUser = requireCurrentUser(authentication);
+        if (currentUser.isEmpty()) {
+            return unauthorizedResponse(authentication);
+        }
+        User user = currentUser.get();
+        if (!ADMIN_ROLE.equalsIgnoreCase(user.getRole())) {
+            return ResponseEntity.status(403).body(Map.of("error", "Только администратор может удалять расписания"));
+        }
+        if (!scheduleUploadRepository.existsById(scheduleId)) {
+            return ResponseEntity.status(404).body(Map.of("error", SCHEDULE_NOT_FOUND_MESSAGE));
+        }
+        scheduleUploadRepository.deleteById(scheduleId);
+        return ResponseEntity.ok(Map.of("message", "Расписание успешно удалено", "id", scheduleId));
     }
 
     @GetMapping("/latest")

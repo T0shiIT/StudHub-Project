@@ -25,7 +25,6 @@ const SCHEDULE_PICKER_DEFAULT_TEXT = 'Выберите расписание';
 const SCHEDULE_PICKER_EMPTY_TEXT = 'Ничего не найдено';
 
 const DATE_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
-
   day: '2-digit',
   month: '2-digit',
   year: 'numeric',
@@ -111,7 +110,6 @@ function capitalize(value: string): string {
 function getMaxColumns(sheet: Sheet): number {
   let max = 0;
   const rows = Array.isArray(sheet.rows) ? sheet.rows : [];
-
   rows.forEach(row => {
     const cells = Array.isArray(row.cells) ? row.cells : [];
     cells.forEach(cell => {
@@ -127,7 +125,6 @@ function buildMatrix(sheet: Sheet): string[][] {
   const matrix = rows.map(row => {
     const rowCells: string[] = new Array(maxCols).fill(EMPTY_CELL);
     const cells = Array.isArray(row.cells) ? row.cells : [];
-
     cells.forEach(cell => {
       rowCells[cell.columnIndex] = normalizeCellValue(cell.value);
     });
@@ -207,7 +204,6 @@ function findColumnByHeader(matrix: string[][], segment: WeekSegment, text: stri
   for (let colIdx = segment.start; colIdx < segment.end; colIdx += 1) {
     if (headerIncludes(matrix, colIdx, text)) return colIdx;
   }
-
   return Math.min(segment.start + fallbackOffset, segment.end - 1);
 }
 
@@ -215,7 +211,6 @@ function findTypeColumn(matrix: string[][], segment: WeekSegment, groupColumnInd
   for (let colIdx = groupColumnIndex - 1; colIdx >= segment.start; colIdx -= 1) {
     if (headerIncludes(matrix, colIdx, TYPE_HEADER_TEXT)) return colIdx;
   }
-
   return findColumnByHeader(matrix, segment, TYPE_HEADER_TEXT, 2);
 }
 
@@ -240,7 +235,6 @@ function getGroupOptions(matrix: string[][], segment: WeekSegment): GroupOption[
       typeColumnIndex: findTypeColumn(matrix, segment, colIdx),
     });
   }
-
   return options;
 }
 
@@ -274,7 +268,6 @@ function appendLessonDetail(lesson: LessonCard, value: string): void {
     lesson.room = value;
     return;
   }
-
   lesson.details.push(value);
 }
 
@@ -312,7 +305,6 @@ function buildDaySchedules(matrix: string[][], segment: WeekSegment, group: Grou
     if (!lesson.type) {
       lesson.type = normalizeCellValue(row[group.typeColumnIndex]);
     }
-
     appendLessonDetail(lesson, lessonValue);
   }
 
@@ -334,10 +326,8 @@ function toScheduleData(value: unknown): ScheduleData {
 
 function formatScheduleDate(value: string | null | undefined): string {
   if (!value) return 'без даты';
-
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-
   return new Intl.DateTimeFormat('ru-RU', DATE_FORMAT_OPTIONS).format(date);
 }
 
@@ -360,7 +350,6 @@ function matchesSavedScheduleSearch(schedule: SavedSchedule, searchQuery: string
 
 function toNumericId(value: unknown): number | null {
   const numericId = Number(value);
-
   return Number.isFinite(numericId) && numericId > 0 ? numericId : null;
 }
 
@@ -374,7 +363,6 @@ async function getResponseErrorMessage(response: Response, fallback: string): Pr
     const message = String((errorBody as { error: unknown }).error);
     if (message) return message;
   }
-
   const text = await response.text().catch(() => EMPTY_CELL);
   return text || fallback;
 }
@@ -382,7 +370,6 @@ async function getResponseErrorMessage(response: Response, fallback: string): Pr
 function createSavedScheduleFromUpload(result: Record<string, unknown>, schedule: ScheduleData): SavedSchedule | null {
   const id = toNumericId(result.id);
   if (!id) return null;
-
   return {
     id,
     fileName: String(result.fileName || schedule.fileName),
@@ -397,6 +384,7 @@ export default function Schedule() {
   const [loading, setLoading] = useState(false);
   const [savedSchedulesLoading, setSavedSchedulesLoading] = useState(true);
   const [scheduleOpening, setScheduleOpening] = useState(false);
+  const [deletingScheduleId, setDeletingScheduleId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const savedSchedulePickerRef = useRef<HTMLDivElement>(null);
   const scheduleSearchInputRef = useRef<HTMLInputElement>(null);
@@ -434,7 +422,6 @@ export default function Schedule() {
       if (!response.ok) {
         throw new Error(await getResponseErrorMessage(response, `Ошибка открытия расписания: ${response.status}`));
       }
-
       const result = await response.json() as Record<string, unknown>;
       const schedule = toScheduleData(result.schedule);
       applyScheduleData(schedule, String(result.id || numericId));
@@ -448,20 +435,23 @@ export default function Schedule() {
   const loadSavedSchedules = async () => {
     setSavedSchedulesLoading(true);
     setError(null);
-
     try {
       const response = await fetchWithCsrf(SCHEDULE_UPLOADS_URL);
       if (!response.ok) {
         throw new Error(await getResponseErrorMessage(response, `Ошибка получения списка расписаний: ${response.status}`));
       }
-
       const result = await response.json() as { schedules?: SavedSchedule[] };
       const schedules = Array.isArray(result.schedules) ? result.schedules : [];
       setSavedSchedules(schedules);
 
-      if (schedules.length > 0) {
+      // Если текущий выбранный schedule не существует в новом списке – сбросить
+      const stillExists = schedules.some(s => String(s.id) === selectedScheduleId);
+      if (selectedScheduleId !== EMPTY_SCHEDULE_SELECT_VALUE && !stillExists) {
+        setScheduleData(null);
+        setSelectedScheduleId(EMPTY_SCHEDULE_SELECT_VALUE);
+      } else if (schedules.length > 0 && selectedScheduleId === EMPTY_SCHEDULE_SELECT_VALUE) {
         await openSavedSchedule(schedules[0].id);
-      } else {
+      } else if (schedules.length === 0) {
         setScheduleData(null);
         setSelectedScheduleId(EMPTY_SCHEDULE_SELECT_VALUE);
       }
@@ -472,20 +462,38 @@ export default function Schedule() {
     }
   };
 
+  const deleteSchedule = async (id: number, event: React.MouseEvent) => {
+    event.stopPropagation(); // чтобы не открывалось расписание при клике на удаление
+    if (!confirm('Вы уверены, что хотите удалить это расписание?')) return;
+
+    setDeletingScheduleId(id);
+    setError(null);
+    try {
+      const response = await fetchWithCsrf(`${SCHEDULE_UPLOADS_URL}/${id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        throw new Error(await getResponseErrorMessage(response, `Ошибка удаления: ${response.status}`));
+      }
+      // Обновляем список после удаления
+      await loadSavedSchedules();
+    } catch (err) {
+      setError(toErrorMessage(err));
+    } finally {
+      setDeletingScheduleId(null);
+    }
+  };
+
   useEffect(() => {
     void loadSavedSchedules();
   }, []);
 
   useEffect(() => {
     if (!savedSchedulePickerOpen) return;
-
     const handleOutsideClick = (event: MouseEvent) => {
       const target = event.target;
       if (!(target instanceof Node)) return;
       if (savedSchedulePickerRef.current?.contains(target)) return;
       setSavedSchedulePickerOpen(false);
     };
-
     document.addEventListener('mousedown', handleOutsideClick);
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, [savedSchedulePickerOpen]);
@@ -496,7 +504,6 @@ export default function Schedule() {
   }, [savedSchedulePickerOpen]);
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -512,7 +519,6 @@ export default function Schedule() {
         method: 'POST',
         body: formData,
       });
-
       if (!response.ok) {
         if (response.status === 403) {
           const text = await response.text();
@@ -522,16 +528,12 @@ export default function Schedule() {
               : 'Нет прав доступа (требуется роль ADMIN)'
           );
         }
-
         throw new Error(await getResponseErrorMessage(response, `Ошибка загрузки: ${response.status}`));
       }
-
       const result = await response.json() as Record<string, unknown>;
       const schedule = toScheduleData(result.schedule);
       const uploadedSchedule = createSavedScheduleFromUpload(result, schedule);
-
       applyScheduleData(schedule, uploadedSchedule ? String(uploadedSchedule.id) : EMPTY_SCHEDULE_SELECT_VALUE);
-
       if (uploadedSchedule) {
         setSavedSchedules(previousSchedules => [
           uploadedSchedule,
@@ -585,8 +587,6 @@ export default function Schedule() {
   };
 
   return (
-
-
     <div className="schedule-page">
       <section className="schedule-hero">
         <div>
@@ -621,23 +621,34 @@ export default function Schedule() {
                     placeholder={SCHEDULE_SEARCH_PLACEHOLDER}
                     onChange={(event) => setScheduleSearchQuery(event.target.value)}
                   />
-
                   <div className="schedule-picker-options" role="listbox" aria-label="Выбор загруженного расписания">
                     {filteredSavedSchedules.length > 0 ? (
                       filteredSavedSchedules.map(schedule => {
                         const isSelected = String(schedule.id) === selectedScheduleId;
                         return (
-                          <button
-                            key={schedule.id}
-                            type="button"
-                            className={`schedule-picker-option ${isSelected ? 'schedule-picker-option--selected' : ''}`}
-                            role="option"
-                            aria-selected={isSelected}
-                            onClick={() => handleSavedScheduleSelect(schedule.id)}
-                          >
-                            <span>{formatSavedScheduleOption(schedule)}</span>
-                            <small>{formatScheduleDate(schedule.createdAt)}</small>
-                          </button>
+                          <div key={schedule.id} className="schedule-picker-option-wrapper">
+                            <button
+                              type="button"
+                              className={`schedule-picker-option ${isSelected ? 'schedule-picker-option--selected' : ''}`}
+                              role="option"
+                              aria-selected={isSelected}
+                              onClick={() => handleSavedScheduleSelect(schedule.id)}
+                            >
+                              <div className="schedule-picker-option__info">
+                                <span>{formatSavedScheduleOption(schedule)}</span>
+                                <small>{formatScheduleDate(schedule.createdAt)}</small>
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              className="schedule-picker-option__delete"
+                              onClick={(e) => deleteSchedule(schedule.id, e)}
+                              disabled={deletingScheduleId === schedule.id}
+                              title="Удалить расписание"
+                            >
+                              {deletingScheduleId === schedule.id ? '...' : '🗑'}
+                            </button>
+                          </div>
                         );
                       })
                     ) : (
@@ -648,8 +659,6 @@ export default function Schedule() {
               )}
             </div>
           )}
-
-
 
           <button className="schedule-upload-btn" onClick={() => fileInputRef.current?.click()} disabled={isScheduleBusy}>
             {loading ? 'Обрабатываем...' : 'Загрузить Excel'}
@@ -686,7 +695,6 @@ export default function Schedule() {
               <strong>{scheduleData.fileName}</strong>
               <small>{currentSheet.rowsCount} строк • {currentSheet.columnsCount} колонок</small>
             </div>
-
             <div className="schedule-controls">
               <label className="schedule-sheet-picker" htmlFor="sheetSelect">
                 Курс / лист
@@ -700,9 +708,7 @@ export default function Schedule() {
                   }}
                 >
                   {scheduleData.sheets.map((sheet, idx) => (
-                    <option key={sheet.sheetName} value={idx}>
-                      {sheet.sheetName}
-                    </option>
+                    <option key={sheet.sheetName} value={idx}>{sheet.sheetName}</option>
                   ))}
                 </select>
               </label>
@@ -732,9 +738,7 @@ export default function Schedule() {
                     onChange={(event) => setSelectedGroupIndex(Number(event.target.value))}
                   >
                     {groupOptions.map((group, idx) => (
-                      <option key={`${group.label}-${group.columnIndex}`} value={idx}>
-                        {group.label}
-                      </option>
+                      <option key={`${group.label}-${group.columnIndex}`} value={idx}>{group.label}</option>
                     ))}
                   </select>
                 </label>
@@ -753,7 +757,6 @@ export default function Schedule() {
                     </div>
                     <strong>{day.lessons.length || '—'}</strong>
                   </header>
-
                   {day.lessons.length > 0 ? (
                     <div className="schedule-lessons-list">
                       {day.lessons.map(lesson => (

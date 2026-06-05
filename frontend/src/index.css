@@ -2093,3 +2093,44 @@ body {
   font-size: 11px;
   margin-left: 8px;
 }
+
+.schedule-picker-option-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.schedule-picker-option {
+  flex: 1;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 6px;
+}
+
+.schedule-picker-option--selected {
+  background-color: #f0f0f0;
+}
+
+.schedule-picker-option__info {
+  display: flex;
+  flex-direction: column;
+}
+
+.schedule-picker-option__delete {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 12px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.schedule-picker-option__delete:hover {
+  opacity: 1;
+}
