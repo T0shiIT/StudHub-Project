@@ -55,6 +55,8 @@ export default function CourseDetailPage() {
     options: ['', ''],
     correctIndex: 0
   });
+  const [progress, setProgress] = useState<number | null>(null);
+  const [loadingProgress, setLoadingProgress] = useState(false);
 
   const isTeacher = user && course && (user.id === course.teacherId || user.role === 'ADMIN');
 
@@ -67,25 +69,17 @@ export default function CourseDetailPage() {
     try {
       const res = await fetchWithCsrf(`http://localhost:8080/api/materials/course/${id}/sections`);
       if (!res.ok) return;
-
       const sectionsData = await res.json();
       setSections(sectionsData);
-
       const initiallyOpened: Record<number, boolean> = {};
-      sectionsData.forEach((section: Section) => {
-        initiallyOpened[section.id] = true;
-      });
+      sectionsData.forEach((section: Section) => { initiallyOpened[section.id] = true; });
       setOpenedSections(initiallyOpened);
-
       const materialsMap: Record<number, Material[]> = {};
       await Promise.all(
         sectionsData.map(async (section: Section) => {
           const materialsRes = await fetchWithCsrf(`http://localhost:8080/api/materials/section/${section.id}`);
-          if (materialsRes.ok) {
-            materialsMap[section.id] = await materialsRes.json();
-          } else {
-            materialsMap[section.id] = [];
-          }
+          if (materialsRes.ok) materialsMap[section.id] = await materialsRes.json();
+          else materialsMap[section.id] = [];
         })
       );
       setMaterials(materialsMap);
@@ -118,12 +112,33 @@ export default function CourseDetailPage() {
     }
   };
 
+  const loadProgress = async () => {
+    if (!user || !course) return;
+    setLoadingProgress(true);
+    try {
+      const res = await fetchWithCsrf(`http://localhost:8080/api/courses/${course.id}/progress`);
+      if (res.ok) {
+        const data = await res.json();
+        setProgress(data.percent);
+      }
+    } catch (error) {
+      console.error('Failed to load progress', error);
+    } finally {
+      setLoadingProgress(false);
+    }
+  };
+
   useEffect(() => {
     if (!id) return;
     loadCourse();
   }, [id]);
 
-  // Если студент пытается зайти на неактивный курс – показываем сообщение
+  useEffect(() => {
+    if (course && user) {
+      loadProgress();
+    }
+  }, [course, user]);
+
   if (!loading && course && user?.role === 'STUDENT' && course.status === 'INACTIVE') {
     return (
       <div className="course-detail-page">
@@ -144,43 +159,26 @@ export default function CourseDetailPage() {
       const res = await fetchWithCsrf('http://localhost:8080/api/materials/sections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          courseId: Number(id),
-          title: newSectionTitle,
-        }),
+        body: JSON.stringify({ courseId: Number(id), title: newSectionTitle }),
       });
       if (res.ok) {
         setNewSectionTitle('');
         await loadSections();
       }
-    } catch (error) {
-      console.error(error);
-    }
+    } catch (error) { console.error(error); }
   };
 
   const deleteSection = async (sectionId: number) => {
     if (!confirm('Удалить раздел и все материалы в нём?')) return;
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/materials/sections/${sectionId}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        await loadSections();
-      }
-    } catch (error) {
-      console.error(error);
-    }
+      const res = await fetchWithCsrf(`http://localhost:8080/api/materials/sections/${sectionId}`, { method: 'DELETE' });
+      if (res.ok) await loadSections();
+    } catch (error) { console.error(error); }
   };
 
   const addQuestion = () => {
-    if (!currentQuestion.text.trim()) {
-      alert('Введите текст вопроса');
-      return;
-    }
-    if (currentQuestion.options.some(opt => !opt.trim())) {
-      alert('Заполните все варианты ответов');
-      return;
-    }
+    if (!currentQuestion.text.trim()) { alert('Введите текст вопроса'); return; }
+    if (currentQuestion.options.some(opt => !opt.trim())) { alert('Заполните все варианты ответов'); return; }
     setTestQuestions([...testQuestions, { ...currentQuestion }]);
     setCurrentQuestion({ text: '', options: ['', ''], correctIndex: 0 });
   };
@@ -198,10 +196,7 @@ export default function CourseDetailPage() {
   };
 
   const addOption = () => {
-    setCurrentQuestion({
-      ...currentQuestion,
-      options: [...currentQuestion.options, '']
-    });
+    setCurrentQuestion({ ...currentQuestion, options: [...currentQuestion.options, ''] });
   };
 
   const removeOption = (idx: number) => {
@@ -211,10 +206,7 @@ export default function CourseDetailPage() {
   };
 
   const createMaterial = async (sectionId: number) => {
-    if (!newMaterial.title.trim()) {
-      alert('Введите название материала');
-      return;
-    }
+    if (!newMaterial.title.trim()) { alert('Введите название материала'); return; }
     try {
       const res = await fetchWithCsrf('http://localhost:8080/api/materials/material', {
         method: 'POST',
@@ -228,40 +220,24 @@ export default function CourseDetailPage() {
           externalUrl: newMaterial.externalUrl || null,
         }),
       });
-      if (!res.ok) {
-        const errorText = await res.text();
-        alert(`Ошибка создания материала: ${errorText}`);
-        return;
-      }
+      if (!res.ok) { const errorText = await res.text(); alert(`Ошибка создания материала: ${errorText}`); return; }
       const createdMaterial = await res.json();
 
       if (newMaterial.materialType === 'TEST' && testQuestions.length > 0) {
         for (const q of testQuestions) {
-          const questionRes = await fetchWithCsrf(`http://localhost:8080/api/materials/${createdMaterial.id}/questions`, {
+          await fetchWithCsrf(`http://localhost:8080/api/materials/${createdMaterial.id}/questions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              text: q.text,
-              options: q.options,
-              correctOptionIndex: q.correctIndex
-            }),
+            body: JSON.stringify({ text: q.text, options: q.options, correctOptionIndex: q.correctIndex }),
           });
-          if (!questionRes.ok) console.error('Ошибка при создании вопроса');
         }
         alert('Тест создан с вопросами');
       } else if (selectedFile && (newMaterial.materialType === 'FILE' || newMaterial.materialType === 'ASSIGNMENT')) {
         const formData = new FormData();
         formData.append('file', selectedFile);
-        const uploadRes = await fetchWithCsrf(`http://localhost:8080/api/materials/material/${createdMaterial.id}/upload-file`, {
-          method: 'POST',
-          body: formData,
-        });
-        if (!uploadRes.ok) {
-          const errMsg = await uploadRes.text();
-          alert(`Материал создан, но файл не загружен. Ошибка: ${errMsg}`);
-        } else {
-          alert('Материал и файл успешно созданы');
-        }
+        const uploadRes = await fetchWithCsrf(`http://localhost:8080/api/materials/material/${createdMaterial.id}/upload-file`, { method: 'POST', body: formData });
+        if (!uploadRes.ok) alert(`Материал создан, но файл не загружен. Ошибка: ${await uploadRes.text()}`);
+        else alert('Материал и файл успешно созданы');
       } else {
         alert('Материал успешно создан');
       }
@@ -271,43 +247,26 @@ export default function CourseDetailPage() {
       setShowMaterialForm(null);
       setTestQuestions([]);
       await loadSections();
-    } catch (error) {
-      console.error('Ошибка при создании материала:', error);
-      alert('Произошла ошибка при создании материала');
-    }
+    } catch (error) { console.error(error); alert('Произошла ошибка при создании материала'); }
   };
 
   const deleteMaterial = async (materialId: number) => {
     if (!confirm('Удалить материал?')) return;
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        await loadSections();
-      }
-    } catch (error) {
-      console.error(error);
-    }
+      const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}`, { method: 'DELETE' });
+      if (res.ok) await loadSections();
+    } catch (error) { console.error(error); }
   };
 
   const toggleSection = (sectionId: number) => {
-    setOpenedSections((prev) => ({
-      ...prev,
-      [sectionId]: !prev[sectionId],
-    }));
+    setOpenedSections(prev => ({ ...prev, [sectionId]: !prev[sectionId] }));
   };
 
   const getSubmissionStatus = async (materialId: number): Promise<string> => {
     try {
       const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}/status`);
-      if (res.ok) {
-        const data = await res.json();
-        return data.status;
-      }
-    } catch (error) {
-      console.error('Failed to load status', error);
-    }
+      if (res.ok) { const data = await res.json(); return data.status; }
+    } catch (error) { console.error('Failed to load status', error); }
     return 'Надо сделать';
   };
 
@@ -316,42 +275,34 @@ export default function CourseDetailPage() {
 
   return (
     <div className="course-detail-page">
-      {course.coverImage && (
-        <div className="detail-cover" style={{ backgroundImage: `url(${course.coverImage})` }} />
-      )}
-
+      {course.coverImage && <div className="detail-cover" style={{ backgroundImage: `url(${course.coverImage})` }} />}
       <div className="course-header">
         <button className="btn-back" onClick={() => navigate('/courses')}>← Назад к курсам</button>
         <div className="course-title-section">
           <h1>{course.title}</h1>
           <p className="course-teacher">👨‍🏫 {course.teacherName}</p>
         </div>
-        {isTeacher && (
-          <button className="btn-edit" onClick={() => navigate(`/courses/${id}/edit`)}>Редактировать курс</button>
-        )}
+        {isTeacher && <button className="btn-edit" onClick={() => navigate(`/courses/${id}/edit`)}>Редактировать курс</button>}
       </div>
-
       <div className="course-content">
         <div className="course-description">
           <h2>О курсе</h2>
           <p>{course.description || 'Описание отсутствует'}</p>
         </div>
-
+        {progress !== null && (
+          <div className="course-progress-bar">
+            <span>Ваш прогресс: {progress}%</span>
+            <div className="progress-bg"><div className="progress-fill" style={{ width: `${progress}%` }} /></div>
+          </div>
+        )}
         <div className="moodle-sections">
           {isTeacher && (
             <div className="create-section">
-              <input
-                type="text"
-                placeholder="Название новой темы"
-                value={newSectionTitle}
-                onChange={(e) => setNewSectionTitle(e.target.value)}
-              />
+              <input type="text" placeholder="Название новой темы" value={newSectionTitle} onChange={(e) => setNewSectionTitle(e.target.value)} />
               <button className="btn-primary" onClick={createSection}>+ Создать тему</button>
             </div>
           )}
-
           {sections.length === 0 && <div className="empty">Тем пока нет</div>}
-
           {sections.map((section) => (
             <div key={section.id} className="moodle-section">
               <div className="section-header" onClick={() => toggleSection(section.id)}>
@@ -359,78 +310,36 @@ export default function CourseDetailPage() {
                 <h3>{section.title}</h3>
                 {isTeacher && (
                   <>
-                    <button
-                      className="btn-small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowMaterialForm(showMaterialForm === section.id ? null : section.id);
-                      }}
-                    >+ Материал</button>
-                    <button
-                      className="btn-small btn-danger-small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteSection(section.id);
-                      }}
-                    >🗑️</button>
+                    <button className="btn-small" onClick={(e) => { e.stopPropagation(); setShowMaterialForm(showMaterialForm === section.id ? null : section.id); }}>+ Материал</button>
+                    <button className="btn-small btn-danger-small" onClick={(e) => { e.stopPropagation(); deleteSection(section.id); }}>🗑️</button>
                   </>
                 )}
               </div>
-
               {openedSections[section.id] && (
                 <div className="section-materials">
                   {showMaterialForm === section.id && (
                     <div className="material-form">
-                      <input
-                        type="text"
-                        placeholder="Название материала"
-                        value={newMaterial.title}
-                        onChange={(e) => setNewMaterial({ ...newMaterial, title: e.target.value })}
-                      />
-                      <textarea
-                        placeholder="Описание"
-                        value={newMaterial.description}
-                        onChange={(e) => setNewMaterial({ ...newMaterial, description: e.target.value })}
-                      />
-                      <select
-                        value={newMaterial.materialType}
-                        onChange={(e) => setNewMaterial({ ...newMaterial, materialType: e.target.value })}
-                      >
+                      <input type="text" placeholder="Название материала" value={newMaterial.title} onChange={(e) => setNewMaterial({ ...newMaterial, title: e.target.value })} />
+                      <textarea placeholder="Описание" value={newMaterial.description} onChange={(e) => setNewMaterial({ ...newMaterial, description: e.target.value })} />
+                      <select value={newMaterial.materialType} onChange={(e) => setNewMaterial({ ...newMaterial, materialType: e.target.value })}>
                         <option value="FILE">Файл</option>
                         <option value="ASSIGNMENT">Задание</option>
                         <option value="LINK">Ссылка</option>
                         <option value="TEXT">Текст</option>
                         <option value="TEST">Тест</option>
                       </select>
-
                       {(newMaterial.materialType === 'FILE' || newMaterial.materialType === 'ASSIGNMENT') && (
                         <div className="file-upload-section">
                           <label>📎 Прикрепить файл:</label>
-                          <input
-                            type="file"
-                            onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                            className="file-input"
-                          />
+                          <input type="file" onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} className="file-input" />
                         </div>
                       )}
-
                       {newMaterial.materialType === 'LINK' && (
-                        <input
-                          type="url"
-                          placeholder="https://example.com"
-                          value={newMaterial.externalUrl || ''}
-                          onChange={(e) => setNewMaterial({ ...newMaterial, externalUrl: e.target.value })}
-                        />
+                        <input type="url" placeholder="https://example.com" value={newMaterial.externalUrl || ''} onChange={(e) => setNewMaterial({ ...newMaterial, externalUrl: e.target.value })} />
                       )}
-
                       {newMaterial.materialType === 'ASSIGNMENT' && (
-                        <input
-                          type="datetime-local"
-                          value={newMaterial.dueDate}
-                          onChange={(e) => setNewMaterial({ ...newMaterial, dueDate: e.target.value })}
-                        />
+                        <input type="datetime-local" value={newMaterial.dueDate} onChange={(e) => setNewMaterial({ ...newMaterial, dueDate: e.target.value })} />
                       )}
-
                       {newMaterial.materialType === 'TEST' && (
                         <div className="test-builder">
                           <hr />
@@ -447,33 +356,13 @@ export default function CourseDetailPage() {
                             </div>
                           )}
                           <div className="new-question">
-                            <input
-                              type="text"
-                              placeholder="Текст вопроса"
-                              value={currentQuestion.text}
-                              onChange={(e) => setCurrentQuestion({ ...currentQuestion, text: e.target.value })}
-                            />
+                            <input type="text" placeholder="Текст вопроса" value={currentQuestion.text} onChange={(e) => setCurrentQuestion({ ...currentQuestion, text: e.target.value })} />
                             <div className="options-list">
                               {currentQuestion.options.map((opt, idx) => (
                                 <div key={idx} className="option-row">
-                                  <input
-                                    type="text"
-                                    placeholder={`Вариант ${idx+1}`}
-                                    value={opt}
-                                    onChange={(e) => updateOption(idx, e.target.value)}
-                                  />
-                                  <label>
-                                    <input
-                                      type="radio"
-                                      name="correctOption"
-                                      checked={currentQuestion.correctIndex === idx}
-                                      onChange={() => setCurrentQuestion({ ...currentQuestion, correctIndex: idx })}
-                                    />
-                                    Правильный
-                                  </label>
-                                  {currentQuestion.options.length > 2 && (
-                                    <button type="button" onClick={() => removeOption(idx)}>✖</button>
-                                  )}
+                                  <input type="text" placeholder={`Вариант ${idx+1}`} value={opt} onChange={(e) => updateOption(idx, e.target.value)} />
+                                  <label><input type="radio" name="correctOption" checked={currentQuestion.correctIndex === idx} onChange={() => setCurrentQuestion({ ...currentQuestion, correctIndex: idx })} /> Правильный</label>
+                                  {currentQuestion.options.length > 2 && <button type="button" onClick={() => removeOption(idx)}>✖</button>}
                                 </div>
                               ))}
                             </div>
@@ -483,34 +372,17 @@ export default function CourseDetailPage() {
                           <hr />
                         </div>
                       )}
-
                       <div className="form-actions">
                         <button className="btn-primary" onClick={() => createMaterial(section.id)}>Создать</button>
-                        <button
-                          className="btn-secondary"
-                          onClick={() => {
-                            setShowMaterialForm(null);
-                            setSelectedFile(null);
-                            setTestQuestions([]);
-                            setCurrentQuestion({ text: '', options: ['', ''], correctIndex: 0 });
-                          }}
-                        >Отмена</button>
+                        <button className="btn-secondary" onClick={() => { setShowMaterialForm(null); setSelectedFile(null); setTestQuestions([]); setCurrentQuestion({ text: '', options: ['', ''], correctIndex: 0 }); }}>Отмена</button>
                       </div>
                     </div>
                   )}
-
                   {!materials[section.id] || materials[section.id].length === 0 ? (
                     <p className="empty">Материалов пока нет</p>
                   ) : (
                     materials[section.id].map((material) => (
-                      <MaterialItem
-                        key={material.id}
-                        material={material}
-                        courseId={id!}
-                        isTeacher={isTeacher}
-                        getSubmissionStatus={getSubmissionStatus}
-                        onDelete={deleteMaterial}
-                      />
+                      <MaterialItem key={material.id} material={material} courseId={id!} isTeacher={isTeacher} getSubmissionStatus={getSubmissionStatus} onDelete={deleteMaterial} />
                     ))
                   )}
                 </div>
@@ -523,13 +395,7 @@ export default function CourseDetailPage() {
   );
 }
 
-function MaterialItem({
-  material,
-  courseId,
-  isTeacher,
-  getSubmissionStatus,
-  onDelete,
-}: {
+function MaterialItem({ material, courseId, isTeacher, getSubmissionStatus, onDelete }: {
   material: Material;
   courseId: string;
   isTeacher: boolean;
@@ -540,41 +406,23 @@ function MaterialItem({
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (material.materialType === 'ASSIGNMENT') {
-      getSubmissionStatus(material.id).then(setStatus);
-    }
+    if (material.materialType === 'ASSIGNMENT') getSubmissionStatus(material.id).then(setStatus);
   }, [material]);
 
-  const icon =
-    material.materialType === 'ASSIGNMENT' ? '📝' :
-    material.materialType === 'FILE' ? '📄' :
-    material.materialType === 'LINK' ? '🔗' :
-    material.materialType === 'TEST' ? '📊' : '📝';
+  const icon = material.materialType === 'ASSIGNMENT' ? '📝' : material.materialType === 'FILE' ? '📄' : material.materialType === 'LINK' ? '🔗' : material.materialType === 'TEST' ? '📊' : '📝';
 
   return (
     <div className="material-item">
       <div className="material-left">
         <span>{icon}</span>
-        <button
-          className="material-link"
-          onClick={() => navigate(`/courses/${courseId}/materials/${material.id}`)}
-        >{material.title}</button>
+        <button className="material-link" onClick={() => navigate(`/courses/${courseId}/materials/${material.id}`)}>{material.title}</button>
       </div>
       <div className="material-right">
-        {material.materialType === 'ASSIGNMENT' && (
-          <span className={`status ${status === 'Выполнено' ? 'done' : 'todo'}`}>{status}</span>
-        )}
+        {material.materialType === 'ASSIGNMENT' && <span className={`status ${status === 'Выполнено' ? 'done' : 'todo'}`}>{status}</span>}
         {isTeacher && (
           <>
-            <button
-              className="btn-small"
-              onClick={() => navigate(`/courses/${courseId}/materials/${material.id}/edit`)}
-              style={{ background: '#f59e0b', marginRight: '6px' }}
-            >✏️</button>
-            <button
-              className="btn-small btn-danger-small"
-              onClick={() => onDelete(material.id)}
-            >🗑️</button>
+            <button className="btn-small" onClick={() => navigate(`/courses/${courseId}/materials/${material.id}/edit`)} style={{ background: '#f59e0b', marginRight: '6px' }}>✏️</button>
+            <button className="btn-small btn-danger-small" onClick={() => onDelete(material.id)}>🗑️</button>
           </>
         )}
       </div>

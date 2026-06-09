@@ -5,4 +5,7 @@ import java.util.Optional;
 
 public interface MaterialSubmissionRepository extends JpaRepository<MaterialSubmission, Long> {
     Optional<MaterialSubmission> findByMaterialIdAndUserId(Long materialId, Long userId);
+
+    // Добавлено: проверка существования сданного задания
+    boolean existsByMaterialIdAndUserId(Long materialId, Long userId);
 }

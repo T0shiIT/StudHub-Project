@@ -6,3 +6,8 @@ const apiClient = axios.create({
 });
 
 export default apiClient;
+
+// Добавленная функция для получения прогресса
+export const getCourseProgress = (courseId: number): Promise<{ percent: number }> => {
+  return apiClient.get(`/api/courses/${courseId}/progress`).then(res => res.data);
+};

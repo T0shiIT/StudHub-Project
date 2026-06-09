@@ -2058,6 +2058,46 @@ body {
   margin-left: 8px;
 }
 
+/* Прогресс-бар на странице курса */
+.course-progress-bar {
+  margin: 20px 0;
+  padding: 16px;
+  background: #f5f5f5;
+  border-radius: 12px;
+}
+.course-progress-bar span {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+.progress-bg {
+  background-color: #e0e0e0;
+  border-radius: 8px;
+  height: 12px;
+  overflow: hidden;
+}
+.progress-fill {
+  background-color: #4caf50;
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+/* Прогресс-бар в карточке курса */
+.course-progress-mini {
+  margin-top: 12px;
+  padding: 8px 12px 12px;
+  border-top: 1px solid #eee;
+}
+.course-progress-mini span {
+  font-size: 0.85rem;
+  color: #555;
+  display: block;
+  margin-bottom: 6px;
+}
+.course-card .progress-bg {
+  height: 8px;
+}
+
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;

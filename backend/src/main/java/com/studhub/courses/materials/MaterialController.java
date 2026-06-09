@@ -441,7 +441,6 @@ public class MaterialController {
         List<Map<String, Object>> result = new ArrayList<>();
         for (TestQuestion q : questions) {
             List<AnswerOption> opts = answerOptionRepository.findByQuestionId(q.getId());
-            // Используем HashMap вместо Map.of() — он поддерживает null-значения
             Map<String, Object> qMap = new HashMap<>();
             qMap.put("id", q.getId());
             qMap.put("text", q.getText());
@@ -504,39 +503,25 @@ public class MaterialController {
         return "ADMIN".equals(user.getRole()) || course.getTeacherId().equals(user.getId());
     }
 
-    /**
-     * Правильный порядок удаления вопросов теста:
-     * 1. Сначала обнуляем FK question.correctOption → null (иначе нельзя удалить AnswerOption)
-     * 2. Удаляем StudentAnswer по questionId
-     * 3. Удаляем AnswerOption
-     * 4. Удаляем TestQuestion
-     */
     private void deleteQuestionsForMaterial(Long materialId) {
         List<TestQuestion> questions = testQuestionRepository.findByMaterialIdOrderById(materialId);
         for (TestQuestion q : questions) {
-            // Шаг 1: обнуляем correctOption чтобы снять FK-ограничение
             q.setCorrectOption(null);
             testQuestionRepository.save(q);
         }
         for (TestQuestion q : questions) {
-            // Шаг 2: удаляем StudentAnswer
             List<StudentAnswer> studentAnswers = studentAnswerRepository.findByQuestionId(q.getId());
             if (!studentAnswers.isEmpty()) {
                 studentAnswerRepository.deleteAll(studentAnswers);
             }
-            // Шаг 3: удаляем AnswerOption
             List<AnswerOption> opts = answerOptionRepository.findByQuestionId(q.getId());
             if (!opts.isEmpty()) {
                 answerOptionRepository.deleteAll(opts);
             }
-            // Шаг 4: удаляем сам вопрос
             testQuestionRepository.delete(q);
         }
     }
 
-    /**
-     * Безопасное извлечение correctOptionIndex из Map (Integer, Long или String)
-     */
     private int parseCorrectIndex(Object correctObj) {
         if (correctObj == null) return 0;
         if (correctObj instanceof Integer) return (Integer) correctObj;
