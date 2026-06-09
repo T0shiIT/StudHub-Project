@@ -6,7 +6,7 @@ import { fetchWithCsrf } from '../utils/csrf'
 
 export default function Register() {
   const navigate = useNavigate()
-  const { refresh } = useAuth()
+  const { refreshUser } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [formData, setFormData] = useState({
@@ -76,16 +76,14 @@ export default function Register() {
       const data = await response.json().catch(() => ({}))
       localStorage.setItem('registeredEmail', formData.email)
 
-      // Если введён спец-код — бэкенд уже создал сессию, ведём сразу на главную.
       if (data && data.verified) {
-        await refresh()
+        await refreshUser()
         localStorage.setItem('isAuthenticated', 'true')
         localStorage.setItem('userEmail', formData.email)
         navigate('/')
         return
       }
 
-      // Иначе ждём, пока пользователь подтвердит email из письма.
       navigate('/register-success')
     } catch {
       setError('Не удалось связаться с сервером')
@@ -141,7 +139,6 @@ export default function Register() {
           className="form-input"
         />
 
-        {/* Поле пароля с кнопкой показа */}
         <div className="password-field">
           <input
             type={showPassword ? 'text' : 'password'}
@@ -171,7 +168,6 @@ export default function Register() {
           </button>
         </div>
 
-        {/* Поле подтверждения пароля с кнопкой показа */}
         <div className="password-field">
           <input
             type={showConfirmPassword ? 'text' : 'password'}
