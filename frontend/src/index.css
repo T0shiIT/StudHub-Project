@@ -1156,135 +1156,99 @@ body {
   }
 }
 
-/* ===== GRADES TABLE ===== */
+/* Контейнер таблицы со скроллом */
 .grades-table-container {
-  overflow-x: auto;
-  margin-top: 24px;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(236, 72, 153, 0.1);
+  max-height: 65vh;
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  position: relative;
 }
 
 .grades-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: white;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 100%;
+  width: max-content;
 }
 
-.grades-table__header-row {
-  background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%);
-}
-
+/* Липкий заголовок */
 .grades-table__header {
-  padding: 16px;
+  position: sticky;
+  top: 0;
+  background-color: #f9fafb;
+  z-index: 10;
+  border-bottom: 2px solid #e5e7eb;
+  padding: 12px 16px;
   text-align: center;
-  border-bottom: 2px solid #f9a8d4;
-  background: rgba(251, 207, 232, 0.3);
+  min-width: 120px;
 }
 
-.grades-table__header-eyebrow {
-  display: block;
-  font-size: 0.75rem;
-  color: #be185d;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 4px;
-}
-
-.grades-table__header h3,
-.grades-table__header h4 {
-  margin: 0;
-  color: #831843;
-  font-weight: 600;
-}
-
+/* Липкая первая колонка */
 .grades-table__student-column {
-  text-align: left;
+  position: sticky;
+  left: 0;
+  background-color: #f9fafb;
+  z-index: 20;
+  border-right: 2px solid #e5e7eb;
   min-width: 200px;
+  text-align: left;
 }
 
-.grades-table__row {
-  transition: background-color 0.2s;
-}
-
-.grades-table__row:hover {
-  background: #fdf2f8;
+.grades-table__header.grades-table__student-column {
+  z-index: 30;
 }
 
 .grades-table__cell {
-  padding: 12px;
-  border-bottom: 1px solid #fce7f3;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  border-right: 1px solid #f3f4f6;
   text-align: center;
+  min-width: 120px;
 }
 
 .grades-table__student-cell {
+  position: sticky;
+  left: 0;
+  background-color: #ffffff;
+  z-index: 5;
+  border-right: 2px solid #e5e7eb;
   text-align: left;
-  background: #fff1f2;
 }
 
-.grades-table__student-cell strong {
-  display: block;
-  color: #be185d;
-  font-size: 0.95rem;
+.grades-table__row:hover .grades-table__cell {
+  background-color: #f9fafb;
+}
+.grades-table__row:hover .grades-table__student-cell {
+  background-color: #f9fafb;
 }
 
-.grades-table__student-cell small {
-  color: #db2777;
-  font-size: 0.8rem;
+.grades-table__add-date-column {
+  min-width: 60px !important;
+  width: 60px;
+  padding: 0 !important;
 }
 
-.grades-table__grade-cell {
-  position: relative;
-  transition: all 0.2s;
-}
-
-.grades-table__grade-cell:hover {
-  transform: scale(1.05);
-  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.2);
-}
-
-.grades-table__grade-value {
-  display: block;
-  font-weight: 700;
-  font-size: 1.1rem;
-  padding: 8px;
-}
-
-.grades-table__input {
+.add-date-btn {
   width: 100%;
-  height: 48px;
-  border: 2px solid #ec4899;
-  border-radius: 6px;
-  background: white;
-  text-align: center;
-  font-size: 1rem;
-  font-weight: 600;
-  outline: none;
-}
-
-.grades-table__input:focus {
-  border-color: #be185d;
-  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.2);
-}
-
-.grades-table__saving {
-  color: #db2777;
-  font-size: 0.875rem;
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-.grades-table__role-badge {
-  display: inline-flex;
+  height: 100%;
+  min-height: 48px;
+  background: #eff6ff;
+  border: none;
+  border-radius: 4px;
+  color: #2563eb;
+  font-size: 1.5rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background: linear-gradient(135deg, #fce7f3, #fbcfe8);
-  border-radius: 20px;
-  font-size: 0.875rem;
-  color: #be185d;
+  justify-content: center;
 }
 
-.grades-table__role-badge strong {
-  color: #831843;
+.add-date-btn:hover {
+  background: #dbeafe;
 }
 
 /* ===== COURSES PAGE ===== */
@@ -2094,43 +2058,8 @@ body {
   margin-left: 8px;
 }
 
-.schedule-picker-option-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-}
-
-.schedule-picker-option {
-  flex: 1;
-  text-align: left;
-  border: none;
-  background: none;
-  padding: 8px 12px;
-  cursor: pointer;
-  font-size: 14px;
-  border-radius: 6px;
-}
-
-.schedule-picker-option--selected {
-  background-color: #f0f0f0;
-}
-
-.schedule-picker-option__info {
-  display: flex;
-  flex-direction: column;
-}
-
-.schedule-picker-option__delete {
-  background: none;
-  border: none;
-  font-size: 18px;
-  cursor: pointer;
-  padding: 0 12px;
-  opacity: 0.6;
-  transition: opacity 0.2s;
-}
-
-.schedule-picker-option__delete:hover {
-  opacity: 1;
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }

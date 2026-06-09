@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -126,7 +127,30 @@ public class GradeService {
         return toDto(saved);
     }
 
-    // ======================== НОВЫЙ МЕТОД ДЛЯ СОХРАНЕНИЯ ПРЕДПРОСМОТРА ========================
+    // НОВЫЙ МЕТОД для массового обновления даты столбца
+    @Transactional
+    public int updateColumnDate(String group, String subject, LocalDate oldDate, LocalDate newDate, Long teacherId) {
+        List<Grade> grades = gradeRepository.findByStudentGroupNameAndSubjectAndDate(group, subject, oldDate);
+        if (grades.isEmpty()) {
+            return 0;
+        }
+
+        // Проверка конфликтов уникальности
+        for (Grade grade : grades) {
+            Optional<Grade> existing = gradeRepository.findByStudentAndSubjectAndDate(grade.getStudent(), subject, newDate);
+            if (existing.isPresent() && !existing.get().getId().equals(grade.getId())) {
+                String studentName = grade.getStudent().getFirstName() + " " + grade.getStudent().getLastName();
+                throw new RuntimeException("Для студента " + studentName + " уже есть оценка по предмету '" + subject + "' на дату " + newDate);
+            }
+        }
+
+        for (Grade grade : grades) {
+            grade.setDate(newDate);
+        }
+        gradeRepository.saveAll(grades);
+        return grades.size();
+    }
+
     @Transactional
     public int savePreview(SavePreviewRequest request, Long teacherId) {
         User teacher = userRepository.findById(teacherId)
@@ -135,7 +159,6 @@ public class GradeService {
         int savedCount = 0;
 
         for (SavePreviewRequest.StudentPreview sp : request.getStudents()) {
-            // Найти или создать студента по имени и группе
             User student = userRepository.findByFirstNameAndLastNameAndGroupName(
                     sp.getFirstName(), sp.getLastName(), sp.getGroup())
                     .orElseGet(() -> {
@@ -144,12 +167,11 @@ public class GradeService {
                         newStudent.setLastName(sp.getLastName());
                         newStudent.setGroupName(sp.getGroup());
                         newStudent.setRole("STUDENT");
-                        // Генерация логина и email
                         String login = (sp.getFirstName() + "." + sp.getLastName()).toLowerCase();
                         String email = login + "@studhub.local";
                         newStudent.setLogin(login);
                         newStudent.setEmail(email);
-                        newStudent.setPasswordHash(""); // временно, позже можно улучшить
+                        newStudent.setPasswordHash("");
                         return userRepository.save(newStudent);
                     });
 

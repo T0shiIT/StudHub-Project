@@ -8,6 +8,7 @@ import com.studhub.grade.dto.GradeUploadResponse;
 import com.studhub.grade.dto.SavePreviewRequest;
 import com.studhub.grade.dto.UpdateGradeRequest;
 import com.studhub.grade.dto.UpdateGradeDateRequest;
+import com.studhub.grade.dto.UpdateColumnDateRequest;
 import com.studhub.schedule.ScheduleParserClient;
 import com.studhub.user.User;
 import com.studhub.user.UserRepository;
@@ -234,7 +235,6 @@ public class GradeController {
         }
     }
 
-    // ======================== НОВЫЙ ЭНДПОИНТ ДЛЯ СОХРАНЕНИЯ ПРЕДПРОСМОТРА ========================
     @PostMapping("/save-preview")
     public ResponseEntity<?> savePreview(@Valid @RequestBody SavePreviewRequest request, Authentication auth) {
         if (auth == null || !auth.isAuthenticated())
@@ -253,6 +253,41 @@ public class GradeController {
             return ResponseEntity.ok(Map.of("saved", saved, "message", "Saved " + saved + " grades"));
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ======================== НОВЫЙ ЭНДПОИНТ ДЛЯ МАССОВОГО ОБНОВЛЕНИЯ ДАТЫ ========================
+    @PatchMapping("/date-column")
+    public ResponseEntity<?> updateColumnDate(@Valid @RequestBody UpdateColumnDateRequest request,
+                                              Authentication auth) {
+        if (auth == null || !auth.isAuthenticated()) {
+            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
+        }
+
+        String email = auth.getName();
+        User teacher = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (!"TEACHER".equalsIgnoreCase(teacher.getRole()) && !"ADMIN".equalsIgnoreCase(teacher.getRole())) {
+            return ResponseEntity.status(403).body(Map.of("error", "Insufficient permissions"));
+        }
+
+        try {
+            int updated = gradeService.updateColumnDate(
+                    request.getGroup(),
+                    request.getSubject(),
+                    request.getOldDate(),
+                    request.getNewDate(),
+                    teacher.getId()
+            );
+            return ResponseEntity.ok(Map.of(
+                    "updated", updated,
+                    "message", "Обновлено " + updated + " оценок"
+            ));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(409).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", "Ошибка обновления: " + e.getMessage()));
         }
     }
 }

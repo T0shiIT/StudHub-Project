@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import yandexIcon from '../assets/yandex-icon.png';
 import vkIcon from '../assets/vk-icon.png';
@@ -7,10 +7,17 @@ import { fetchWithCsrf } from '../utils/csrf';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { refresh } = useAuth();
+  const { refreshUser, isAuthenticated, loading } = useAuth();
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Если пользователь уже авторизован — перенаправляем на расписание
+  useEffect(() => {
+    if (!loading && isAuthenticated) {
+      navigate('/schedule');
+    }
+  }, [isAuthenticated, loading, navigate]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -39,12 +46,12 @@ export default function Login() {
         setError(err.error || 'Ошибка входа');
         return;
       }
-      await refresh();
+      await refreshUser();
       localStorage.setItem('isAuthenticated', 'true');
       localStorage.setItem('userEmail', formData.email);
       navigate('/schedule');
     } catch {
-      setError('Сервер недоступен');
+      setError('Не удалось подключиться к серверу. Попробуйте позже.');
     } finally {
       setSubmitting(false);
     }
@@ -55,9 +62,18 @@ export default function Login() {
   };
 
   const handleVkLogin = () => {
+    // TODO: реализовать вход через ВК через бэкенд
     localStorage.setItem('isAuthenticated', 'true');
     navigate('/schedule');
   };
+
+  if (loading) {
+    return <div className="loading">Загрузка...</div>;
+  }
+
+  if (isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="login-container">
@@ -68,12 +84,26 @@ export default function Login() {
       {error && <div className="error-message">{error}</div>}
       <form onSubmit={handleSubmit} className="login-form">
         <div className="form-group">
-          <input type="email" name="email" placeholder="Login / Email"
-                 value={formData.email} onChange={handleChange} required className="form-input" />
+          <input
+            type="email"
+            name="email"
+            placeholder="Login / Email"
+            value={formData.email}
+            onChange={handleChange}
+            required
+            className="form-input"
+          />
         </div>
         <div className="form-group">
-          <input type="password" name="password" placeholder="Пароль"
-                 value={formData.password} onChange={handleChange} required className="form-input" />
+          <input
+            type="password"
+            name="password"
+            placeholder="Пароль"
+            value={formData.password}
+            onChange={handleChange}
+            required
+            className="form-input"
+          />
         </div>
         <button type="submit" className="btn btn-primary btn-login" disabled={submitting}>
           {submitting ? 'Входим…' : 'Войти'}

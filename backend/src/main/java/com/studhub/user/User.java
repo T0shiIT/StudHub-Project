@@ -1,7 +1,6 @@
 package com.studhub.user;
 
 import jakarta.persistence.*;
-
 import java.time.Instant;
 
 @Entity
@@ -31,16 +30,14 @@ public class User {
     @Column(name = "last_name", nullable = false)
     private String lastName;
 
-    @Column(name = "group_name", nullable = false)
+    @Column(name = "group_name") // теперь nullable = true
     private String groupName;
 
     @Column(name = "role", nullable = false)
-    private String role = "STUDENT";   // роль по умолчанию
+    private String role = "STUDENT";
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
-
-
 
     @Column(name = "is_blocked")
     private Boolean isBlocked = false;
@@ -53,9 +50,9 @@ public class User {
         this.createdAt = Instant.now();
     }
 
-    // Геттеры / сеттеры ...
-
+    // Геттеры и сеттеры
     public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
@@ -79,4 +76,5 @@ public class User {
     public void setRole(String role) { this.role = role; }
 
     public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 }

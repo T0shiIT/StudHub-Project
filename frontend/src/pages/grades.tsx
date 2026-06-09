@@ -6,23 +6,26 @@ const GRADES_URL = '/api/grades';
 const GRADES_PREVIEW_URL = '/api/grades/preview';
 const GRADES_SAVE_PREVIEW_URL = '/api/grades/save-preview';
 
-const getGradeColor = (grade: number | null): string => {
-  if (grade === 5 || grade === 4) return '#fce7f3';
-  if (grade === 3) return '#fbcfe8';
-  if (grade === 2) return '#f9a8d4';
+const getGradeColor = (grade: string | null): string => {
+  if (grade === null || grade === '') return '#f3e8ff';
+  const num = parseInt(grade, 10);
+  if (num === 5 || num === 4) return '#fce7f3';
+  if (num === 3) return '#fbcfe8';
+  if (num === 2) return '#f9a8d4';
   return '#f3e8ff';
 };
 
-const getGradeTextColor = (grade: number | null): string => {
-  if (grade === 5 || grade === 4) return '#be185d';
-  if (grade === 3) return '#9d174d';
-  if (grade === 2) return '#831843';
+const getGradeTextColor = (grade: string | null): string => {
+  if (grade === null || grade === '') return '#6b21a8';
+  const num = parseInt(grade, 10);
+  if (num === 5 || num === 4) return '#be185d';
+  if (num === 3) return '#9d174d';
+  if (num === 2) return '#831843';
   return '#6b21a8';
 };
 
 export default function Grades() {
   const { user, isAuthenticated } = useAuth();
-
   let normalizedRole: UserRole = 'STUDENT';
   const rawRole = (user?.role as string) || '';
   if (rawRole.toUpperCase().includes('ADMIN')) normalizedRole = 'ADMIN';
@@ -30,10 +33,8 @@ export default function Grades() {
   const role = normalizedRole;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   const [groups, setGroups] = useState<string[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>('');
-
   const [journal, setJournal] = useState<JournalData | null>(null);
   const [previewData, setPreviewData] = useState<JournalData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,12 +42,12 @@ export default function Grades() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadMsg, setUploadMsg] = useState('');
-
+  
   const [editingCell, setEditingCell] = useState<{
     studentId: number;
     oldDate: string;
     gradeId?: number;
-    oldGrade: number | null;
+    oldGrade: string | null;
   } | null>(null);
   const [tempGrade, setTempGrade] = useState('');
   const [tempDate, setTempDate] = useState('');
@@ -92,7 +93,7 @@ export default function Grades() {
   useEffect(() => {
     if (previewData) return;
     if (!isAuthenticated) return;
-
+    
     const fetchJournal = async () => {
       try {
         setLoading(true);
@@ -107,16 +108,16 @@ export default function Grades() {
           setLoading(false);
           return;
         }
-
+        
         const res = await apiFetch(`${GRADES_URL}${params.toString() ? `?${params}` : ''}`);
         if (!res.ok) throw new Error('Ошибка загрузки');
         const data = await res.json();
-
+        
         const studentsMap = new Map();
         const datesSet = new Set<string>();
-        const gradesMap: Record<number, Record<string, number | null>> = {};
+        const gradesMap: Record<number, Record<string, string | null>> = {};
         const newGradeIdMap: Record<number, Record<string, number>> = {};
-
+        
         data.forEach((g: any) => {
           if (!studentsMap.has(g.studentId)) {
             const parts = g.studentFullName.trim().split(' ');
@@ -127,10 +128,10 @@ export default function Grades() {
             newGradeIdMap[g.studentId] = {};
           }
           if (g.date) datesSet.add(g.date);
-          gradesMap[g.studentId][g.date] = g.grade ? Number(g.grade) : null;
+          gradesMap[g.studentId][g.date] = g.grade !== null && g.grade !== undefined ? String(g.grade) : null;
           newGradeIdMap[g.studentId][g.date] = g.id;
         });
-
+        
         setJournal({
           students: Array.from(studentsMap.values()),
           dates: Array.from(datesSet).sort(),
@@ -143,10 +144,41 @@ export default function Grades() {
         setLoading(false);
       }
     };
+    
     fetchJournal();
   }, [isAuthenticated, role, selectedGroup, previewData]);
 
-  const startEditing = (studentId: number, date: string, currentGrade: number | null) => {
+  const handleAddDateColumn = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const newDate = prompt("Введите новую дату в формате ГГГГ-ММ-ДД:", today);
+    if (!newDate) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+      alert('Неверный формат даты. Используйте ГГГГ-ММ-ДД');
+      return;
+    }
+    const targetData = previewData || journal;
+    if (!targetData) return;
+    if (targetData.dates.includes(newDate)) {
+      alert('Такая дата уже существует');
+      return;
+    }
+    const newGrades: Record<number, Record<string, string | null>> = { ...targetData.grades };
+    targetData.students.forEach((student: any) => {
+      newGrades[student.id] = { ...newGrades[student.id], [newDate]: null };
+    });
+    const updatedData = {
+      ...targetData,
+      dates: [...targetData.dates, newDate].sort(),
+      grades: newGrades,
+    };
+    if (previewData) {
+      setPreviewData(updatedData);
+    } else {
+      setJournal(updatedData);
+    }
+  };
+
+  const startEditing = (studentId: number, date: string, currentGrade: string | null) => {
     if (role !== 'TEACHER' && role !== 'ADMIN') return;
     const gradeId = gradeIdMap[studentId]?.[date];
     setEditingCell({ studentId, oldDate: date, gradeId, oldGrade: currentGrade });
@@ -157,48 +189,45 @@ export default function Grades() {
   const saveCell = async () => {
     if (!editingCell) return;
     const { studentId, oldDate, gradeId, oldGrade } = editingCell;
-
-    let newGradeNum: number | null = null;
-    if (tempGrade.trim() !== '') {
-      newGradeNum = parseInt(tempGrade, 10);
-      if (isNaN(newGradeNum) || newGradeNum < 2 || newGradeNum > 5) {
-        alert('Оценка должна быть числом от 2 до 5');
-        return;
-      }
-    }
+    const newGradeValue = tempGrade.trim();
     const newDate = tempDate;
+
     if (!newDate) {
-      alert('Дата обязательна');
+      setEditingCell(null);
+      setSavingCell(null);
       return;
     }
 
     setSavingCell({ studentId, date: oldDate });
 
     try {
-      if (!gradeId && newGradeNum === null) {
-        alert('Введите оценку для создания');
+      if (!gradeId && !newGradeValue) {
+        setEditingCell(null);
+        setSavingCell(null);
         return;
       }
 
       if (!gradeId) {
         const res = await apiFetch(GRADES_URL, {
           method: 'POST',
-          body: JSON.stringify({ studentId, subject: 'Основной предмет', grade: String(newGradeNum), date: newDate }),
+          body: JSON.stringify({ studentId, subject: 'Основной предмет', grade: newGradeValue, date: newDate }),
         });
         if (!res.ok) throw new Error('Не удалось создать оценку');
         window.location.reload();
         return;
-      }
+        }
 
       let gradeChanged = false, dateChanged = false;
-      if (newGradeNum !== null && newGradeNum !== oldGrade) {
+
+      if (newGradeValue !== (oldGrade !== null ? String(oldGrade) : '')) {
         const res = await apiFetch(`${GRADES_URL}/${gradeId}`, {
           method: 'PATCH',
-          body: JSON.stringify({ grade: String(newGradeNum) }),
+          body: JSON.stringify({ grade: newGradeValue }),
         });
         if (!res.ok) throw new Error('Ошибка обновления оценки');
         gradeChanged = true;
       }
+
       if (newDate !== oldDate) {
         const res = await apiFetch(`${GRADES_URL}/${gradeId}/date`, {
           method: 'PATCH',
@@ -217,7 +246,7 @@ export default function Grades() {
       setJournal(prev => {
         if (!prev) return prev;
         const newGrades = { ...prev.grades };
-        const gradeValue = gradeChanged ? newGradeNum : oldGrade;
+        const gradeValue = newGradeValue || null;
         if (dateChanged) {
           delete newGrades[studentId][oldDate];
           newGrades[studentId][newDate] = gradeValue;
@@ -229,6 +258,7 @@ export default function Grades() {
           return { ...prev, grades: newGrades };
         }
       });
+
       if (dateChanged) {
         setGradeIdMap(prevMap => {
           const newMap = { ...prevMap };
@@ -240,11 +270,47 @@ export default function Grades() {
           return newMap;
         });
       }
+
       setEditingCell(null);
     } catch (err: any) {
-      alert(err.message);
+      console.error('Error saving grade:', err);
     } finally {
       setSavingCell(null);
+    }
+  };
+
+  const handleDateColumnClick = async (oldDate: string) => {
+    if (role !== 'TEACHER' && role !== 'ADMIN') return;
+    if (isPreviewMode) {
+      alert('В режиме предпросмотра нельзя изменить дату. Сначала сохраните журнал.');
+      return;
+    }
+    if (!selectedGroup) {
+      alert('Не выбрана группа');
+      return;
+    }
+    const newDateStr = prompt('Введите новую дату в формате ГГГГ-ММ-ДД:', oldDate);
+    if (!newDateStr) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDateStr)) {
+      alert('Неверный формат даты. Используйте ГГГГ-ММ-ДД');
+      return;
+    }
+    try {
+      const res = await apiFetch('/api/grades/date-column', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          group: selectedGroup,
+          subject: 'Основной предмет',
+          oldDate,
+          newDate: newDateStr,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ошибка обновления');
+      alert(`Обновлено ${data.updated} оценок`);
+      window.location.reload();
+    } catch (err: any) {
+      alert(err.message);
     }
   };
 
@@ -337,7 +403,13 @@ export default function Grades() {
   );
 
   const fileInputElement = (
-    <input type="file" ref={fileInputRef} className="schedule-file-input" onChange={handleFileUpload} accept=".xlsx,.xls" />
+    <input
+      type="file"
+      ref={fileInputRef}
+      className="schedule-file-input"
+      onChange={handleFileUpload}
+      accept=".xlsx,.xls"
+    />
   );
 
   if (loading && !isPreviewMode) {
@@ -363,13 +435,23 @@ export default function Grades() {
       <>
         {heroSection}
         {fileInputElement}
-        {uploading && <div className="schedule-alert schedule-alert--loading">Загрузка и обработка файла...</div>}
-        {uploadMsg && <div className={`schedule-alert ${uploadMsg.startsWith('Таблица') ? 'schedule-alert--success' : 'schedule-alert--error'}`}>{uploadMsg}</div>}
+        {uploading && (
+          <div className="schedule-alert schedule-alert--loading">Загрузка и обработка файла...</div>
+        )}
+        {uploadMsg && (
+          <div className={`schedule-alert ${uploadMsg.startsWith('Таблица') ? 'schedule-alert--success' : 'schedule-alert--error'}`}>
+            {uploadMsg}
+          </div>
+        )}
         <div className="schedule-empty-state">
           <div className="schedule-empty-state__icon">📊</div>
           <h3>Журнал пуст</h3>
           <p>Данные не найдены или журнал ещё не заполнен.</p>
-          {(role === 'ADMIN' || role === 'TEACHER') && <p style={{ marginTop: '12px' }}>Используйте кнопку <strong>«Загрузить Excel (предпросмотр)»</strong> выше.</p>}
+          {(role === 'ADMIN' || role === 'TEACHER') && (
+            <p style={{ marginTop: '12px' }}>
+              Используйте кнопку <strong>«Загрузить Excel (предпросмотр)»</strong> выше.
+            </p>
+          )}
         </div>
       </>
     );
@@ -379,24 +461,33 @@ export default function Grades() {
     <div className="schedule-page">
       {heroSection}
       {fileInputElement}
-      {uploading && <div className="schedule-alert schedule-alert--loading">Загрузка и обработка файла...</div>}
-      {uploadMsg && <div className={`schedule-alert ${uploadMsg.startsWith('Таблица') ? 'schedule-alert--success' : 'schedule-alert--error'}`}>{uploadMsg}</div>}
-
+      {uploading && (
+        <div className="schedule-alert schedule-alert--loading">Загрузка и обработка файла...</div>
+      )}
+      {uploadMsg && (
+        <div className={`schedule-alert ${uploadMsg.startsWith('Таблица') ? 'schedule-alert--success' : 'schedule-alert--error'}`}>
+          {uploadMsg}
+        </div>
+      )}
       {(role === 'TEACHER' || role === 'ADMIN') && groups.length > 0 && !isPreviewMode && (
         <div style={{ marginBottom: '20px', textAlign: 'right' }}>
           <label style={{ marginRight: '8px' }}>Группа:</label>
-          <select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)} style={{ padding: '6px 12px', borderRadius: '8px' }}>
-            {groups.map(group => <option key={group} value={group}>{group}</option>)}
+          <select
+            value={selectedGroup}
+            onChange={(e) => setSelectedGroup(e.target.value)}
+            style={{ padding: '6px 12px', borderRadius: '8px' }}
+          >
+            {groups.map(group => (
+              <option key={group} value={group}>{group}</option>
+            ))}
           </select>
         </div>
       )}
-
       {isPreviewMode && (
         <div style={{ marginBottom: '16px', padding: '8px', background: '#e0f2fe', borderRadius: '8px', textAlign: 'center' }}>
           🔍 Режим предпросмотра (данные из Excel, не сохранены в БД)
         </div>
       )}
-
       <section className="schedule-card">
         <div className="schedule-toolbar">
           <div className="schedule-file-info">
@@ -405,22 +496,47 @@ export default function Grades() {
             <small>{displayData.students.length} студентов • {displayData.dates.length} дат</small>
           </div>
           <div className="schedule-controls">
-            <span className="schedule-role-badge">Роль: <strong>{role === 'STUDENT' ? 'Студент' : role === 'TEACHER' ? 'Преподаватель' : 'Администратор'}</strong></span>
+            <span className="schedule-role-badge">
+              Роль:{' '}
+              <strong>
+                {role === 'STUDENT' ? 'Студент' : role === 'TEACHER' ? 'Преподаватель' : 'Администратор'}
+              </strong>
+            </span>
           </div>
         </div>
-
-        <div className="grades-table-container">
-          <table className="grades-table">
+        
+        {/* === НАЧАЛО ИЗМЕНЕНИЙ ДЛЯ СКРОЛЛА === */}
+        <div className="grades-table-container" style={{ overflowX: 'auto', width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+          <table className="grades-table" style={{ minWidth: '100%', borderCollapse: 'collapse', whiteSpace: 'nowrap' }}>
             <thead>
               <tr className="grades-table__header-row">
-                <th className="grades-table__header grades-table__student-column">
-                  <div><span className="grades-table__header-eyebrow">Список</span><h3>Студент</h3></div>
+                <th 
+                  className="grades-table__header grades-table__student-column"
+                  style={{ position: 'sticky', left: 0, backgroundColor: '#f9fafb', zIndex: 20, boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)' }}
+                >
+                  <div>
+                    <span className="grades-table__header-eyebrow">Список</span>
+                    <h3>Студент</h3>
+                  </div>
                 </th>
                 {displayData.dates.map((date) => (
-                  <th key={date} className="grades-table__header">
-                    <div><span className="grades-table__header-eyebrow">Дата</span><h4>{new Date(date).toLocaleDateString('ru-RU')}</h4></div>
+                  <th
+                    key={date}
+                    className="grades-table__header"
+                    onClick={() => (role === 'TEACHER' || role === 'ADMIN') && !isPreviewMode && handleDateColumnClick(date)}
+                    style={{ cursor: (role === 'TEACHER' || role === 'ADMIN') && !isPreviewMode ? 'pointer' : 'default', minWidth: '120px', textAlign: 'center' }}
+                  >
+                    <div>
+                      <span className="grades-table__header-eyebrow">Дата</span>
+                      <h4>{new Date(date).toLocaleDateString('ru-RU')}</h4>
+                    </div>
                   </th>
                 ))}
+                {(role === 'TEACHER' || role === 'ADMIN') && !isPreviewMode && (
+                  <th className="grades-table__header grades-table__add-date-column" style={{ minWidth: '60px' }}>
+                    <button onClick={handleAddDateColumn} title="Добавить новую дату" className="add-date-btn">＋</button>
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -428,8 +544,14 @@ export default function Grades() {
                 const isSavingThisRow = savingCell?.studentId === student.id;
                 return (
                   <tr key={student.id} className="grades-table__row">
-                    <td className="grades-table__cell grades-table__student-cell">
-                      <div><strong>{student.lastName} {student.firstName}</strong><small>ID: {student.id}</small></div>
+                    <td 
+                      className="grades-table__cell grades-table__student-cell"
+                      style={{ position: 'sticky', left: 0, backgroundColor: '#ffffff', zIndex: 10, boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)' }}
+                    >
+                      <div>
+                        <strong>{student.lastName} {student.firstName}</strong>
+                        <small>ID: {student.id}</small>
+                      </div>
                     </td>
                     {displayData.dates.map((date) => {
                       const grade = displayData.grades[student.id]?.[date] ?? null;
@@ -442,6 +564,8 @@ export default function Grades() {
                           style={{
                             background: getGradeColor(grade),
                             cursor: (role === 'TEACHER' || role === 'ADMIN') && !isPreviewMode ? 'pointer' : 'default',
+                            minWidth: '120px',
+                            textAlign: 'center'
                           }}
                           onClick={() => !isEditing && (role === 'TEACHER' || role === 'ADMIN') && !isPreviewMode && startEditing(student.id, date, grade)}
                         >
@@ -450,14 +574,12 @@ export default function Grades() {
                           ) : isEditing ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '140px' }}>
                               <input
-                                type="number"
-                                min="2"
-                                max="5"
-                                placeholder="Оценка 2-5"
+                                type="text"
+                                placeholder="Оценка"
                                 value={tempGrade}
                                 onChange={(e) => setTempGrade(e.target.value)}
                                 autoFocus
-                                style={{ width: '100%', padding: '4px' }}
+                                style={{ width: '100%', padding: '4px', textAlign: 'center' }}
                               />
                               <input
                                 type="date"
@@ -465,33 +587,40 @@ export default function Grades() {
                                 onChange={(e) => setTempDate(e.target.value)}
                                 style={{ width: '100%', padding: '4px' }}
                               />
-                              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                                <button onClick={saveCell} style={{ padding: '4px 8px' }}>💾 Сохранить</button>
-                                <button onClick={() => setEditingCell(null)} style={{ padding: '4px 8px' }}>❌ Отмена</button>
+                              <div style={{ display: 'flex', gap: '8px', marginTop: '4px', justifyContent: 'center' }}>
+                                <button onClick={saveCell} style={{ padding: '4px 8px' }}>💾</button>
+                                <button onClick={() => setEditingCell(null)} style={{ padding: '4px 8px' }}>❌</button>
                               </div>
                             </div>
                           ) : (
-                            <span className="grades-table__grade-value" style={{ color: getGradeTextColor(grade) }}>
-                              {grade !== null ? grade : '—'}
+                            <span
+                              className="grades-table__grade-value"
+                              style={{ color: getGradeTextColor(grade), fontSize: '1.1rem', fontWeight: 'bold' }}
+                            >
+                              {grade !== null && grade !== '' ? grade : '—'}
                             </span>
                           )}
                         </td>
                       );
                     })}
+                    {(role === 'TEACHER' || role === 'ADMIN') && !isPreviewMode && (
+                      <td className="grades-table__cell grades-table__grade-cell" style={{ background: '#f9fafb', cursor: 'default', minWidth: '60px' }}></td>
+                    )}
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
+        {/* === КОНЕЦ ИЗМЕНЕНИЙ ДЛЯ СКРОЛЛА === */}
 
         <div className="schedule-empty-state" style={{ marginTop: '24px', background: '#fdf2f8', border: '1px solid #f9a8d4' }}>
-          <div className="schedule-empty-state__icon">💡</div>
+          <div className="schedule-empty-state__icon">🐙</div>
           <h3>Подсказка</h3>
           <p>
             {role === 'STUDENT' && 'Режим только для чтения. Редактирование недоступно.'}
-            {role === 'TEACHER' && 'Кликните по любой ячейке – появится форма для ввода оценки и выбора даты. Также доступна загрузка Excel (предпросмотр).'}
-            {role === 'ADMIN' && 'Кликните по любой ячейке – измените оценку и дату. Загрузка Excel работает в режиме предпросмотра (без сохранения в БД).'}
+            {role === 'TEACHER' && 'Кликните по ячейке для изменения оценки. Чтобы добавить новую дату, нажмите кнопку "＋" в заголовке таблицы.'}
+            {role === 'ADMIN' && 'Кликните по ячейке для изменения оценки. Для добавления новой колонки с датой используйте кнопку "＋".'}
           </p>
         </div>
       </section>

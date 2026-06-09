@@ -1,39 +1,43 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { ensureCsrfToken, fetchWithCsrf } from '../utils/csrf';
 
+interface User {
+  id: number;
+  login: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  group?: string;
+  role: string;
+}
+
 interface AuthContextType {
-  user: any;
+  user: User | null;
   loading: boolean;
   isAuthenticated: boolean;
-  refresh: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const checkAuth = async () => {
+  const refreshUser = async () => {
     try {
-      // Гарантируем наличие CSRF-токена перед любыми запросами
       await ensureCsrfToken();
-
-      const response = await fetchWithCsrf('http://localhost:8080/api/user');
-
+      const response = await fetchWithCsrf('http://localhost:8080/api/user/me');
       if (response.ok) {
         const data = await response.json();
         if (data && !data.error) {
           setUser(data);
           localStorage.setItem('isAuthenticated', 'true');
-        } else {
-          setUser(null);
-          localStorage.removeItem('isAuthenticated');
+          return;
         }
-      } else {
-        setUser(null);
-        localStorage.removeItem('isAuthenticated');
       }
+      setUser(null);
+      localStorage.removeItem('isAuthenticated');
     } catch {
       setUser(null);
     } finally {
@@ -42,11 +46,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    checkAuth();
+    refreshUser();
   }, []);
 
+  const isAuthenticated = !!user;
+
   return (
-    <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, refresh: checkAuth }}>
+    <AuthContext.Provider value={{ user, loading, isAuthenticated, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

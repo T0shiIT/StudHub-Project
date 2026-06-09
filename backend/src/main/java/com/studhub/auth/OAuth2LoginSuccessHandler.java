@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-
 @Component
 public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
 
@@ -37,7 +36,6 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
     private static final String LAST_NAME_ATTRIBUTE = "last_name";
     private static final String DEFAULT_ROLE = "STUDENT";
     private static final String OAUTH_PASSWORD_HASH = "oauth:external";
-    private static final String DEFAULT_GROUP_NAME = "—";
 
     private final CppUserClient cppUserClient;
     private final UserRepository userRepository;
@@ -69,7 +67,7 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
         if (email == null || email.isBlank()) {
             email = stringAttribute(principal, EMAIL_ATTRIBUTE);
         }
-        return email == null || email.isBlank()
+        return (email == null || email.isBlank())
                 ? Optional.empty()
                 : Optional.of(email.toLowerCase());
     }
@@ -85,7 +83,7 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
         user.setPasswordHash(OAUTH_PASSWORD_HASH);
         user.setFirstName(nameParts[0]);
         user.setLastName(nameParts[1]);
-        user.setGroupName(DEFAULT_GROUP_NAME);
+        user.setGroupName(null);           // группа не задана, пользователь выберет позже в профиле
         user.setRole(DEFAULT_ROLE);
         User savedUser = userRepository.save(user);
 
@@ -101,6 +99,8 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
         ));
         if (!result.isSuccess()) {
             log.warn("C++ OAuth sync failed for {}: status={}, body={}", email, result.status(), result.body());
+        } else {
+            log.info("OAuth user created and synced: {}", email);
         }
 
         return savedUser;
@@ -131,7 +131,7 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
             }
         }
 
-        return new String[] {
+        return new String[]{
                 defaultIfBlank(firstName, "OAuth"),
                 defaultIfBlank(lastName, "User")
         };

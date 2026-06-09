@@ -38,21 +38,20 @@ public class SecurityConfig {
                         .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                         .csrfTokenRequestHandler(csrfHandler)
                         .ignoringRequestMatchers(
-                                "/api/auth/**", 
-                                "/api/test", 
-                                "/api/csrf", 
-                                "/api/internal/**", 
-                                "/error", 
+                                "/api/auth/**",
+                                "/api/test",
+                                "/api/csrf",
+                                "/api/internal/**",
+                                "/error",
                                 "/api/courses/*/enroll",
                                 "/api/materials/material/*/upload-file",
-                                "/api/materials/*/submit" 
-                                )
+                                "/api/materials/*/submit",
+                                "/api/user/group"
+                        )
                 )
                 .securityContext(sc -> sc.securityContextRepository(securityContextRepository))
                 .authorizeHttpRequests(auth -> auth
-                        // Полностью публичные
                         .requestMatchers("/", "/api/test", "/api/csrf", "/api/auth/**", "/error").permitAll()
-                        // Internal — permitAll, но контроллер сам проверяет аутентификацию
                         .requestMatchers("/api/internal/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/schedule/upload").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/user/change-role").hasRole("ADMIN")
@@ -66,6 +65,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/courses/*/enroll").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/courses").hasAnyRole("TEACHER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/user/{id}").authenticated()
+                        .requestMatchers("/api/user/me", "/api/user/groups", "/api/user/group").authenticated()
                         .requestMatchers("/api/user", "/api/cpp-profile", "/api/schedule/latest").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/courses/**").hasAnyRole("TEACHER", "ADMIN")
                         .requestMatchers("/api/materials/**").authenticated()
