@@ -3,6 +3,11 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { fetchWithCsrf } from '../utils/csrf';
 
+interface CourseProgress {
+  percent: number;
+  hasGradedMaterials: boolean;
+}
+
 interface Course {
   id: number;
   title: string;
@@ -13,7 +18,7 @@ interface Course {
   enrollmentCount?: number;
   enrolled?: boolean;
   status?: string;
-  progress?: number | null;
+  progress?: CourseProgress | null;
 }
 
 export default function CoursesPage() {
@@ -77,7 +82,7 @@ export default function CoursesPage() {
               const progRes = await fetchWithCsrf(`http://localhost:8080/api/courses/${course.id}/progress`);
               if (progRes.ok) {
                 const progData = await progRes.json();
-                return { ...course, progress: progData.percent };
+                return { ...course, progress: { percent: progData.percent, hasGradedMaterials: progData.hasGradedMaterials } };
               }
             } catch (e) { console.error(`Failed to load progress for course ${course.id}`, e); }
           }
@@ -157,10 +162,10 @@ export default function CoursesPage() {
                   </div>
                 </Link>
                 {showEnrollButton && <button className="btn-enroll" onClick={() => enrollInCourse(course.id)} disabled={isEnrollingNow}>{isEnrollingNow ? 'Запись...' : 'Записаться'}</button>}
-                {course.progress !== null && (
+                {course.progress && course.progress.hasGradedMaterials && (
                   <div className="course-progress-mini">
-                    <span>Пройдено: {course.progress}%</span>
-                    <div className="progress-bg"><div className="progress-fill" style={{ width: `${course.progress}%` }} /></div>
+                    <span>Пройдено: {course.progress.percent}%</span>
+                    <div className="progress-bg"><div className="progress-fill" style={{ width: `${course.progress.percent}%` }} /></div>
                   </div>
                 )}
               </div>

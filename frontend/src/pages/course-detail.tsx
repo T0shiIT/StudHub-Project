@@ -55,7 +55,7 @@ export default function CourseDetailPage() {
     options: ['', ''],
     correctIndex: 0
   });
-  const [progress, setProgress] = useState<number | null>(null);
+  const [progress, setProgress] = useState<{ percent: number; hasGradedMaterials: boolean } | null>(null);
   const [loadingProgress, setLoadingProgress] = useState(false);
 
   const isTeacher = user && course && (user.id === course.teacherId || user.role === 'ADMIN');
@@ -119,10 +119,13 @@ export default function CourseDetailPage() {
       const res = await fetchWithCsrf(`http://localhost:8080/api/courses/${course.id}/progress`);
       if (res.ok) {
         const data = await res.json();
-        setProgress(data.percent);
+        setProgress({ percent: data.percent, hasGradedMaterials: data.hasGradedMaterials });
+      } else {
+        setProgress(null);
       }
     } catch (error) {
       console.error('Failed to load progress', error);
+      setProgress(null);
     } finally {
       setLoadingProgress(false);
     }
@@ -247,6 +250,8 @@ export default function CourseDetailPage() {
       setShowMaterialForm(null);
       setTestQuestions([]);
       await loadSections();
+      // После создания нового материала обновляем прогресс
+      await loadProgress();
     } catch (error) { console.error(error); alert('Произошла ошибка при создании материала'); }
   };
 
@@ -254,7 +259,10 @@ export default function CourseDetailPage() {
     if (!confirm('Удалить материал?')) return;
     try {
       const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}`, { method: 'DELETE' });
-      if (res.ok) await loadSections();
+      if (res.ok) {
+        await loadSections();
+        await loadProgress();
+      }
     } catch (error) { console.error(error); }
   };
 
@@ -289,10 +297,10 @@ export default function CourseDetailPage() {
           <h2>О курсе</h2>
           <p>{course.description || 'Описание отсутствует'}</p>
         </div>
-        {progress !== null && (
+        {progress && progress.hasGradedMaterials && (
           <div className="course-progress-bar">
-            <span>Ваш прогресс: {progress}%</span>
-            <div className="progress-bg"><div className="progress-fill" style={{ width: `${progress}%` }} /></div>
+            <span>Ваш прогресс: {progress.percent}%</span>
+            <div className="progress-bg"><div className="progress-fill" style={{ width: `${progress.percent}%` }} /></div>
           </div>
         )}
         <div className="moodle-sections">

@@ -1,10 +1,12 @@
 package com.studhub.courses.dto;
 
 public class CourseProgressDto {
-    private int percent; // от 0 до 100
+    private int percent;
+    private boolean hasGradedMaterials;
 
-    public CourseProgressDto(int percent) {
+    public CourseProgressDto(int percent, boolean hasGradedMaterials) {
         this.percent = percent;
+        this.hasGradedMaterials = hasGradedMaterials;
     }
 
     public int getPercent() {
@@ -13,5 +15,13 @@ public class CourseProgressDto {
 
     public void setPercent(int percent) {
         this.percent = percent;
+    }
+
+    public boolean isHasGradedMaterials() {
+        return hasGradedMaterials;
+    }
+
+    public void setHasGradedMaterials(boolean hasGradedMaterials) {
+        this.hasGradedMaterials = hasGradedMaterials;
     }
 }

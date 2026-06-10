@@ -24,16 +24,11 @@ public class CourseProgressService {
         this.enrollmentRepository = enrollmentRepository;
     }
 
-    /**
-     * @param courseId ID курса
-     * @param userId   ID пользователя
-     * @param role     роль пользователя (STUDENT, TEACHER, ADMIN)
-     */
     public CourseProgressDto getProgressForUser(Long courseId, Long userId, String role) {
-        // Для TEACHER и ADMIN не проверяем запись на курс
+        // Проверка записи для студентов
         if (!"TEACHER".equals(role) && !"ADMIN".equals(role)) {
             if (!enrollmentRepository.existsByCourseIdAndUserId(courseId, userId)) {
-                return new CourseProgressDto(0);
+                return new CourseProgressDto(0, true);
             }
         }
 
@@ -42,8 +37,9 @@ public class CourseProgressService {
                 .filter(m -> "ASSIGNMENT".equals(m.getMaterialType()) || "TEST".equals(m.getMaterialType()))
                 .toList();
 
+        // Если нет оцениваемых материалов – возвращаем флаг false
         if (graded.isEmpty()) {
-            return new CourseProgressDto(100);
+            return new CourseProgressDto(0, false);
         }
 
         long submittedCount = graded.stream()
@@ -51,7 +47,7 @@ public class CourseProgressService {
                 .count();
 
         int percent = (int) (submittedCount * 100 / graded.size());
-        return new CourseProgressDto(percent);
+        return new CourseProgressDto(percent, true);
     }
 
     private boolean isMaterialCompleted(CourseMaterial material, Long userId) {
