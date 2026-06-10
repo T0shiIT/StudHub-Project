@@ -2,13 +2,14 @@ package com.studhub.grade;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.studhub.courses.Course;
+import com.studhub.courses.CourseRepository;
 import com.studhub.grade.dto.CreateGradeRequest;
 import com.studhub.grade.dto.GradeDto;
-import com.studhub.grade.dto.GradeUploadResponse;
 import com.studhub.grade.dto.SavePreviewRequest;
-import com.studhub.grade.dto.UpdateGradeRequest;
-import com.studhub.grade.dto.UpdateGradeDateRequest;
 import com.studhub.grade.dto.UpdateColumnDateRequest;
+import com.studhub.grade.dto.UpdateGradeDateRequest;
+import com.studhub.grade.dto.UpdateGradeRequest;
 import com.studhub.schedule.ScheduleParserClient;
 import com.studhub.user.User;
 import com.studhub.user.UserRepository;
@@ -20,10 +21,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/grades")
@@ -31,94 +30,89 @@ public class GradeController {
 
     private final GradeService gradeService;
     private final UserRepository userRepository;
+    private final CourseRepository courseRepository;
     private final ScheduleParserClient parserClient;
     private final ObjectMapper objectMapper;
 
-    public GradeController(GradeService gradeService, UserRepository userRepository,
-                           ScheduleParserClient parserClient, ObjectMapper objectMapper) {
+    public GradeController(GradeService gradeService,
+                           UserRepository userRepository,
+                           CourseRepository courseRepository,
+                           ScheduleParserClient parserClient,
+                           ObjectMapper objectMapper) {
         this.gradeService = gradeService;
         this.userRepository = userRepository;
+        this.courseRepository = courseRepository;
         this.parserClient = parserClient;
         this.objectMapper = objectMapper;
     }
 
-    @GetMapping
-    public ResponseEntity<?> getGrades(@RequestParam(required = false) String group,
-                                       @RequestParam(required = false) String subject,
-                                       Authentication auth) {
+    // Получить журнал для курса (для студентов и учителей)
+    @GetMapping("/course/{courseId}")
+    public ResponseEntity<?> getGradesForCourse(@PathVariable Long courseId,
+                                                @RequestParam(required = false) String group,
+                                                Authentication auth) {
         if (auth == null || !auth.isAuthenticated())
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
 
-        String email = auth.getName();
-        User currentUser = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = userRepository.findByEmail(auth.getName()).orElseThrow();
+        Course course = courseRepository.findById(courseId).orElse(null);
+        if (course == null) return ResponseEntity.notFound().build();
 
-        if ("STUDENT".equalsIgnoreCase(currentUser.getRole())) {
-            return ResponseEntity.ok(gradeService.getGradesForStudent(currentUser.getId()));
+        if ("STUDENT".equalsIgnoreCase(user.getRole())) {
+            String studentGroup = user.getGroupName();
+            if (studentGroup == null) return ResponseEntity.ok(List.of());
+            return ResponseEntity.ok(gradeService.getGradesForGroup(courseId, studentGroup, null));
+        } else {
+            if (group == null || group.isBlank())
+                return ResponseEntity.badRequest().body(Map.of("error", "Parameter 'group' is required for teacher/admin"));
+            return ResponseEntity.ok(gradeService.getGradesForGroup(courseId, group, null));
         }
-
-        if (group == null || group.isBlank()) {
-            if ("ADMIN".equalsIgnoreCase(currentUser.getRole())) {
-                return ResponseEntity.ok(Collections.emptyList());
-            }
-            return ResponseEntity.badRequest().body(Map.of("error", "Parameter 'group' is required for teacher/admin"));
-        }
-        return ResponseEntity.ok(gradeService.getGradesForGroup(group, subject));
     }
 
-    @GetMapping("/groups")
-    public ResponseEntity<?> getAvailableGroups(Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) {
+    // Получить список групп для курса (только учитель/админ)
+    @GetMapping("/course/{courseId}/groups")
+    public ResponseEntity<?> getGroupsForCourse(@PathVariable Long courseId, Authentication auth) {
+        if (auth == null || !auth.isAuthenticated())
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
-        }
-        String email = auth.getName();
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (!"TEACHER".equalsIgnoreCase(user.getRole()) && !"ADMIN".equalsIgnoreCase(user.getRole())) {
+        User user = userRepository.findByEmail(auth.getName()).orElseThrow();
+        if (!"TEACHER".equalsIgnoreCase(user.getRole()) && !"ADMIN".equalsIgnoreCase(user.getRole()))
             return ResponseEntity.status(403).body(Map.of("error", "Forbidden"));
-        }
 
-        List<String> groups = userRepository.findDistinctGroupNames();
+        List<String> groups = userRepository.findDistinctGroupNamesByCourseId(courseId);
         return ResponseEntity.ok(groups);
     }
 
-    @PatchMapping("/{gradeId}")
-    public ResponseEntity<?> updateGrade(@PathVariable Long gradeId,
-                                         @Valid @RequestBody UpdateGradeRequest request,
-                                         Authentication auth) {
+    // Обновить дату для целой колонки
+    @PatchMapping("/course/{courseId}/date-column")
+    public ResponseEntity<?> updateColumnDate(@PathVariable Long courseId,
+                                              @Valid @RequestBody UpdateColumnDateRequest request,
+                                              Authentication auth) {
         if (auth == null || !auth.isAuthenticated())
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
 
-        String email = auth.getName();
-        User teacher = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Teacher not found"));
-
-        if (!"TEACHER".equalsIgnoreCase(teacher.getRole()) && !"ADMIN".equalsIgnoreCase(teacher.getRole())) {
+        User teacher = userRepository.findByEmail(auth.getName()).orElseThrow();
+        if (!"TEACHER".equalsIgnoreCase(teacher.getRole()) && !"ADMIN".equalsIgnoreCase(teacher.getRole()))
             return ResponseEntity.status(403).body(Map.of("error", "Insufficient permissions"));
-        }
 
         try {
-            return ResponseEntity.ok(gradeService.updateGrade(gradeId, request, teacher.getId()));
+            int updated = gradeService.updateColumnDate(courseId, request.getGroup(), request.getSubject(),
+                    request.getOldDate(), request.getNewDate(), teacher.getId());
+            return ResponseEntity.ok(Map.of("updated", updated, "message", "Обновлено " + updated + " оценок"));
         } catch (RuntimeException e) {
-            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
+            return ResponseEntity.status(409).body(Map.of("error", e.getMessage()));
         }
     }
 
+    // Создать новую оценку
     @PostMapping
-    public ResponseEntity<?> createGrade(@Valid @RequestBody CreateGradeRequest request,
-                                         Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) {
+    public ResponseEntity<?> createGrade(@Valid @RequestBody CreateGradeRequest request, Authentication auth) {
+        if (auth == null || !auth.isAuthenticated())
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
-        }
 
-        String email = auth.getName();
-        User teacher = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Teacher not found"));
-
-        if (!"TEACHER".equalsIgnoreCase(teacher.getRole()) && !"ADMIN".equalsIgnoreCase(teacher.getRole())) {
+        User teacher = userRepository.findByEmail(auth.getName()).orElseThrow();
+        if (!"TEACHER".equalsIgnoreCase(teacher.getRole()) && !"ADMIN".equalsIgnoreCase(teacher.getRole()))
             return ResponseEntity.status(403).body(Map.of("error", "Only teachers and admins can create grades"));
-        }
 
         try {
             GradeDto created = gradeService.createGrade(request, teacher.getId());
@@ -128,6 +122,27 @@ public class GradeController {
         }
     }
 
+    // Обновить оценку
+    @PatchMapping("/{gradeId}")
+    public ResponseEntity<?> updateGrade(@PathVariable Long gradeId,
+                                         @Valid @RequestBody UpdateGradeRequest request,
+                                         Authentication auth) {
+        if (auth == null || !auth.isAuthenticated())
+            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
+
+        User teacher = userRepository.findByEmail(auth.getName()).orElseThrow();
+        if (!"TEACHER".equalsIgnoreCase(teacher.getRole()) && !"ADMIN".equalsIgnoreCase(teacher.getRole()))
+            return ResponseEntity.status(403).body(Map.of("error", "Insufficient permissions"));
+
+        try {
+            GradeDto updated = gradeService.updateGrade(gradeId, request, teacher.getId());
+            return ResponseEntity.ok(updated);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // Обновить дату оценки
     @PatchMapping("/{gradeId}/date")
     public ResponseEntity<?> updateGradeDate(@PathVariable Long gradeId,
                                              @Valid @RequestBody UpdateGradeDateRequest request,
@@ -135,13 +150,9 @@ public class GradeController {
         if (auth == null || !auth.isAuthenticated())
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
 
-        String email = auth.getName();
-        User teacher = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Teacher not found"));
-
-        if (!"TEACHER".equalsIgnoreCase(teacher.getRole()) && !"ADMIN".equalsIgnoreCase(teacher.getRole())) {
+        User teacher = userRepository.findByEmail(auth.getName()).orElseThrow();
+        if (!"TEACHER".equalsIgnoreCase(teacher.getRole()) && !"ADMIN".equalsIgnoreCase(teacher.getRole()))
             return ResponseEntity.status(403).body(Map.of("error", "Insufficient permissions"));
-        }
 
         try {
             GradeDto updated = gradeService.updateGradeDate(gradeId, request.getDate(), teacher.getId());
@@ -151,84 +162,15 @@ public class GradeController {
         }
     }
 
-    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<?> uploadGrades(@RequestParam("file") MultipartFile file, Authentication auth) {
-        if (auth == null || !auth.isAuthenticated())
-            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
-
-        String email = auth.getName();
-        User teacher = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        if (!"TEACHER".equalsIgnoreCase(teacher.getRole()) && !"ADMIN".equalsIgnoreCase(teacher.getRole())) {
-            return ResponseEntity.status(403).body(Map.of("error", "Only teachers and admins can upload grades"));
-        }
-        if (file.isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "File is empty"));
-
-        try {
-            String jsonString = parserClient.parseToJson(file);
-            JsonNode root = objectMapper.readTree(jsonString);
-            JsonNode sheets = root.path("sheets");
-            if (!sheets.isArray() || sheets.isEmpty())
-                return ResponseEntity.badRequest().body(Map.of("error", "No sheets found"));
-
-            JsonNode records = sheets.get(0).path("records");
-            if (!records.isArray()) return ResponseEntity.badRequest().body(Map.of("error", "No records found"));
-
-            List<String> emails = new ArrayList<>();
-            for (JsonNode record : records) {
-                String sEmail = record.path("student_email").asText();
-                if (!sEmail.isBlank()) emails.add(sEmail);
-            }
-
-            Map<String, User> studentsMap = userRepository.findAllByEmailIn(emails).stream()
-                    .collect(Collectors.toMap(User::getEmail, u -> u, (a, b) -> a));
-
-            int processed = 0, failed = 0;
-            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-
-            for (JsonNode record : records) {
-                try {
-                    String studentEmail = record.path("student_email").asText();
-                    String subject = record.path("subject").asText();
-                    String gradeValue = record.path("grade").asText();
-                    String dateStr = record.path("date").asText();
-
-                    if (studentEmail.isBlank() || subject.isBlank() || gradeValue.isBlank() || dateStr.isBlank()) {
-                        failed++;
-                        continue;
-                    }
-
-                    User student = studentsMap.get(studentEmail);
-                    if (student == null) {
-                        failed++;
-                        continue;
-                    }
-
-                    LocalDate date = LocalDate.parse(dateStr, dateFormatter);
-                    gradeService.saveGrade(student, subject, gradeValue, date, teacher);
-                    processed++;
-                } catch (Exception e) {
-                    failed++;
-                }
-            }
-
-            return ResponseEntity.ok(new GradeUploadResponse(processed, failed, "Upload completed"));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Failed to process file: " + e.getMessage()));
-        }
-    }
-
-    @PostMapping("/preview")
+    // ======================== ЗАГРУЗКА EXCEL (ПРЕДПРОСМОТР) ========================
+    @PostMapping(value = "/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> previewExcel(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "File is empty"));
         }
         try {
             String jsonString = parserClient.parseToJson(file);
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode root = mapper.readTree(jsonString);
+            JsonNode root = objectMapper.readTree(jsonString);
             return ResponseEntity.ok(root);
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
@@ -253,41 +195,6 @@ public class GradeController {
             return ResponseEntity.ok(Map.of("saved", saved, "message", "Saved " + saved + " grades"));
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
-        }
-    }
-
-    // ======================== НОВЫЙ ЭНДПОИНТ ДЛЯ МАССОВОГО ОБНОВЛЕНИЯ ДАТЫ ========================
-    @PatchMapping("/date-column")
-    public ResponseEntity<?> updateColumnDate(@Valid @RequestBody UpdateColumnDateRequest request,
-                                              Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) {
-            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
-        }
-
-        String email = auth.getName();
-        User teacher = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        if (!"TEACHER".equalsIgnoreCase(teacher.getRole()) && !"ADMIN".equalsIgnoreCase(teacher.getRole())) {
-            return ResponseEntity.status(403).body(Map.of("error", "Insufficient permissions"));
-        }
-
-        try {
-            int updated = gradeService.updateColumnDate(
-                    request.getGroup(),
-                    request.getSubject(),
-                    request.getOldDate(),
-                    request.getNewDate(),
-                    teacher.getId()
-            );
-            return ResponseEntity.ok(Map.of(
-                    "updated", updated,
-                    "message", "Обновлено " + updated + " оценок"
-            ));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(409).body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("error", "Ошибка обновления: " + e.getMessage()));
         }
     }
 }

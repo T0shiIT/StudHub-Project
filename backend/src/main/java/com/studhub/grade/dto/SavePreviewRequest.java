@@ -9,6 +9,7 @@ public class SavePreviewRequest {
     private Map<Integer, Map<String, Integer>> grades;
     private String group;
     private String subject = "Основной предмет";
+    private Long courseId;
 
     public static class StudentPreview {
         private int id;
@@ -36,4 +37,6 @@ public class SavePreviewRequest {
     public void setGroup(String group) { this.group = group; }
     public String getSubject() { return subject; }
     public void setSubject(String subject) { this.subject = subject; }
+    public Long getCourseId() { return courseId; }
+    public void setCourseId(Long courseId) { this.courseId = courseId; }
 }

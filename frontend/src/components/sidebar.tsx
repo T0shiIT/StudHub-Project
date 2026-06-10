@@ -18,13 +18,6 @@ export default function Sidebar() {
       </NavLink>
 
       <NavLink
-        to="/grades"
-        className={({ isActive }) => (isActive ? 'active' : '')}
-      >
-        Оценки
-      </NavLink>
-
-      <NavLink
         to="/courses"
         className={({ isActive }) => (isActive ? 'active' : '')}
       >

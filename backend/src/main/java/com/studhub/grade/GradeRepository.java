@@ -22,6 +22,14 @@ public interface GradeRepository extends JpaRepository<Grade, Long> {
     @Query("SELECT DISTINCT g.subject FROM Grade g WHERE g.student.groupName = :groupName")
     List<String> findDistinctSubjectsByGroupName(@Param("groupName") String groupName);
 
-    // НОВЫЙ МЕТОД для массового обновления даты столбца
     List<Grade> findByStudentGroupNameAndSubjectAndDate(String groupName, String subject, LocalDate date);
+
+    // ========== НОВЫЕ МЕТОДЫ С courseId ==========
+    List<Grade> findByCourseIdAndStudentGroupName(Long courseId, String groupName);
+    List<Grade> findByCourseIdAndSubjectAndStudentGroupName(Long courseId, String subject, String groupName);
+    Optional<Grade> findByCourseIdAndStudentAndSubjectAndDate(Long courseId, User student, String subject, LocalDate date);
+    List<Grade> findByCourseIdAndStudentGroupNameAndSubjectAndDate(Long courseId, String groupName, String subject, LocalDate date);
+    
+    @Query("SELECT DISTINCT g.subject FROM Grade g WHERE g.course.id = :courseId AND g.student.groupName = :groupName")
+    List<String> findDistinctSubjectsByCourseIdAndGroupName(@Param("courseId") Long courseId, @Param("groupName") String groupName);
 }

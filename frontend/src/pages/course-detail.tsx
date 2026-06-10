@@ -59,6 +59,7 @@ export default function CourseDetailPage() {
   const [loadingProgress, setLoadingProgress] = useState(false);
 
   const isTeacher = user && course && (user.id === course.teacherId || user.role === 'ADMIN');
+  const canViewGrades = user && (user.role === 'ADMIN' || user.role === 'TEACHER' || (user.role === 'STUDENT' && course?.enrolled));
 
   if (!id) {
     navigate('/courses');
@@ -250,7 +251,6 @@ export default function CourseDetailPage() {
       setShowMaterialForm(null);
       setTestQuestions([]);
       await loadSections();
-      // После создания нового материала обновляем прогресс
       await loadProgress();
     } catch (error) { console.error(error); alert('Произошла ошибка при создании материала'); }
   };
@@ -290,7 +290,19 @@ export default function CourseDetailPage() {
           <h1>{course.title}</h1>
           <p className="course-teacher">👨‍🏫 {course.teacherName}</p>
         </div>
-        {isTeacher && <button className="btn-edit" onClick={() => navigate(`/courses/${id}/edit`)}>Редактировать курс</button>}
+        <div>
+          {isTeacher && (
+            <button className="btn-edit" onClick={() => navigate(`/courses/${id}/edit`)}>Редактировать курс</button>
+          )}
+          {canViewGrades && (
+            <button
+              onClick={() => navigate(`/courses/${id}/grades`)}
+              style={{ marginLeft: '8px', background: '#8b5cf6', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer' }}
+            >
+              📊 Журнал
+            </button>
+          )}
+        </div>
       </div>
       <div className="course-content">
         <div className="course-description">

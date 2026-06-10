@@ -6,7 +6,6 @@ import Register from './pages/register'
 import RegisterSuccess from './pages/registersuccess'
 import Welcome from './pages/welcome'
 import Schedule from './pages/schedule'
-import Grades from './pages/grades'
 import Announcements from './pages/announcements'
 import Profile from './pages/profile'
 import ChatPage from "./pages/chat";
@@ -16,6 +15,7 @@ import CourseEditPage from './pages/course-edit';
 import MaterialDetailPage from './pages/material-detail';
 import TestPassing from './pages/TestPassing';
 import MaterialEditPage from './pages/material-edit';
+import Grades from './pages/grades'; // ← импорт оставлен, но маршрут убран
 
 function App() {
   return (
@@ -31,15 +31,16 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<Welcome />} />
             <Route path="schedule" element={<Schedule />} />
-            <Route path="grades" element={<Grades />} />
+            {/* <Route path="grades" element={<Grades />} /> – удалено */}
             <Route path="announcements" element={<Announcements />} />
             <Route path="profile" element={<Profile />} />
             <Route path="chat" element={<ChatPage />} />
             
-            {/* ВАЖНО: Специфичные маршруты ДО общих */}
+            {/* Курсы */}
             <Route path="courses/:id/edit" element={<CourseEditPage />} />
             <Route path="courses/:id/materials/:materialId" element={<MaterialDetailPage />} />
             <Route path="courses/:id" element={<CourseDetailPage />} />
+            <Route path="courses/:courseId/grades" element={<Grades />} />
             <Route path="courses" element={<CoursesPage />} />
             <Route path="courses/:courseId/materials/:materialId/test" element={<TestPassing />} />
             <Route path="courses/:courseId/materials/:materialId/edit" element={<MaterialEditPage />} />

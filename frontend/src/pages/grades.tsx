@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, type ChangeEvent } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { fetchWithCsrf } from '../utils/csrf';
 import type { JournalData, UserRole } from '../types/journal';
 
-const GRADES_URL = '/api/grades';
-const GRADES_PREVIEW_URL = '/api/grades/preview';
-const GRADES_SAVE_PREVIEW_URL = '/api/grades/save-preview';
+const JSON_HEADERS = {
+  'Content-Type': 'application/json',
+};
 
 const getGradeColor = (grade: string | null): string => {
   if (grade === null || grade === '') return '#f3e8ff';
@@ -25,6 +27,8 @@ const getGradeTextColor = (grade: string | null): string => {
 };
 
 export default function Grades() {
+  const { courseId } = useParams<{ courseId: string }>();
+  const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   let normalizedRole: UserRole = 'STUDENT';
   const rawRole = (user?.role as string) || '';
@@ -40,9 +44,8 @@ export default function Grades() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [uploadMsg, setUploadMsg] = useState('');
-  
+  const [error, setError] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<{
     studentId: number;
     oldDate: string;
@@ -54,106 +57,233 @@ export default function Grades() {
   const [savingCell, setSavingCell] = useState<{ studentId: number; date: string } | null>(null);
   const [gradeIdMap, setGradeIdMap] = useState<Record<number, Record<string, number>>>({});
 
-  const apiFetch = async (url: string, options: RequestInit = {}) => {
-    const csrfToken = document.cookie
-      .split('; ')
-      .find(row => row.startsWith('XSRF-TOKEN='))
-      ?.split('=')[1];
-    const isFormData = options.body instanceof FormData;
-    return await fetch(url, {
-      ...options,
-      credentials: 'include',
-      headers: {
-        'Accept': 'application/json',
-        ...(!isFormData && options.method !== 'GET' && { 'Content-Type': 'application/json' }),
-        ...(csrfToken && { 'X-XSRF-TOKEN': csrfToken }),
-        ...options.headers,
-      },
-    });
-  };
-
   useEffect(() => {
     if (role === 'TEACHER' || role === 'ADMIN') {
-      apiFetch('/api/grades/groups')
+      if (!courseId) return;
+      fetchWithCsrf(`/api/grades/course/${courseId}/groups`)
         .then(res => res.ok ? res.json() : [])
         .then((data: string[]) => {
           const filtered = data.filter(g => g && g.trim() !== '');
           setGroups(filtered);
           if (filtered.length === 0) return;
-          if (user?.groupName && filtered.includes(user.groupName)) {
-            setSelectedGroup(user.groupName);
-          } else {
-            setSelectedGroup(filtered[0]);
-          }
+          if (user?.groupName && filtered.includes(user.groupName)) setSelectedGroup(user.groupName);
+          else setSelectedGroup(filtered[0]);
         })
         .catch(err => console.error('Failed to load groups:', err));
     }
-  }, [role, user?.groupName]);
+  }, [role, user?.groupName, courseId]);
 
   useEffect(() => {
     if (previewData) return;
-    if (!isAuthenticated) return;
-    
-    const fetchJournal = async () => {
+    if (!isAuthenticated || !courseId) return;
+
+    const fetchGrades = async () => {
+      setLoading(true);
       try {
-        setLoading(true);
-        setError('');
-        const params = new URLSearchParams();
-        if (role === 'STUDENT') {
-          // student – no group
-        } else if (selectedGroup) {
-          params.set('group', selectedGroup);
-        } else {
-          setJournal(null);
-          setLoading(false);
-          return;
+        let url = `/api/grades/course/${courseId}`;
+        if (role !== 'STUDENT' && selectedGroup) {
+          url += `?group=${encodeURIComponent(selectedGroup)}`;
         }
-        
-        const res = await apiFetch(`${GRADES_URL}${params.toString() ? `?${params}` : ''}`);
+        const res = await fetchWithCsrf(url);
         if (!res.ok) throw new Error('Ошибка загрузки');
         const data = await res.json();
-        
-        const studentsMap = new Map();
-        const datesSet = new Set<string>();
-        const gradesMap: Record<number, Record<string, string | null>> = {};
-        const newGradeIdMap: Record<number, Record<string, number>> = {};
-        
-        data.forEach((g: any) => {
-          if (!studentsMap.has(g.studentId)) {
-            const parts = g.studentFullName.trim().split(' ');
-            const lastName = parts[0] || '';
-            const firstName = parts.slice(1).join(' ') || '';
-            studentsMap.set(g.studentId, { id: g.studentId, firstName, lastName });
-            gradesMap[g.studentId] = {};
-            newGradeIdMap[g.studentId] = {};
-          }
-          if (g.date) datesSet.add(g.date);
-          gradesMap[g.studentId][g.date] = g.grade !== null && g.grade !== undefined ? String(g.grade) : null;
-          newGradeIdMap[g.studentId][g.date] = g.id;
-        });
-        
-        setJournal({
-          students: Array.from(studentsMap.values()),
-          dates: Array.from(datesSet).sort(),
-          grades: gradesMap,
-        });
-        setGradeIdMap(newGradeIdMap);
+        processGradesData(data);
       } catch (err: any) {
         setError(err.message);
       } finally {
         setLoading(false);
       }
     };
-    
-    fetchJournal();
-  }, [isAuthenticated, role, selectedGroup, previewData]);
 
-  const handleAddDateColumn = () => {
+    if (role === 'STUDENT') {
+      fetchGrades();
+    } else if (selectedGroup) {
+      fetchGrades();
+    } else {
+      setJournal(null);
+      setLoading(false);
+    }
+  }, [isAuthenticated, role, selectedGroup, courseId, previewData]);
+
+  const processGradesData = (data: any[]) => {
+    const studentsMap = new Map();
+    const datesSet = new Set<string>();
+    const gradesMap: Record<number, Record<string, string | null>> = {};
+    const newGradeIdMap: Record<number, Record<string, number>> = {};
+
+    for (const g of data) {
+      if (!studentsMap.has(g.studentId)) {
+        const parts = (g.studentFullName || '').trim().split(' ');
+        const lastName = parts[0] || '';
+        const firstName = parts.slice(1).join(' ') || '';
+        studentsMap.set(g.studentId, { id: g.studentId, firstName, lastName });
+        gradesMap[g.studentId] = {};
+        newGradeIdMap[g.studentId] = {};
+      }
+      if (g.date) datesSet.add(g.date);
+      gradesMap[g.studentId][g.date] = g.grade !== null && g.grade !== undefined ? String(g.grade) : null;
+      newGradeIdMap[g.studentId][g.date] = g.id;
+    }
+
+    setJournal({
+      students: Array.from(studentsMap.values()),
+      dates: Array.from(datesSet).sort(),
+      grades: gradesMap,
+    });
+    setGradeIdMap(newGradeIdMap);
+  };
+
+  // Парсит дату формата "11.09.2024" или "2024-09-11" в ISO "2024-09-11"
+  const parseDate = (raw: string): string | null => {
+    if (!raw) return null;
+    // DD.MM.YYYY
+    const ddmmyyyy = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (ddmmyyyy) return `${ddmmyyyy[3]}-${ddmmyyyy[2].padStart(2, '0')}-${ddmmyyyy[1].padStart(2, '0')}`;
+    // YYYY-MM-DD уже ISO
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    return null;
+  };
+
+  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadMsg('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetchWithCsrf('/api/grades/preview', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ошибка загрузки');
+
+      if (!data.sheets || !data.sheets[0]) {
+        throw new Error('Неверный формат данных от сервера');
+      }
+
+      const sheet = data.sheets[0];
+
+      // Формат журнала: строка-заголовок вида [№, "Фамилия Имя", "Группа", "11.09.2024", ...]
+      // Определяем колонки-даты из заголовка через rows[0].cells
+      const headerRow = sheet.rows?.[0];
+      if (!headerRow) throw new Error('Не найден заголовок таблицы');
+
+      const dateCols: { colIndex: number; isoDate: string }[] = [];
+      let nameColIndex = -1;
+      let groupColIndex = -1;
+
+      for (const cell of headerRow.cells) {
+        const val = String(cell.value ?? '').trim();
+        const iso = parseDate(val);
+        if (iso) {
+          dateCols.push({ colIndex: cell.columnIndex, isoDate: iso });
+        } else if (/фамил/i.test(val) || /имя/i.test(val)) {
+          nameColIndex = cell.columnIndex;
+        } else if (/групп/i.test(val)) {
+          groupColIndex = cell.columnIndex;
+        }
+      }
+
+      if (dateCols.length === 0) throw new Error('Не найдены колонки с датами в заголовке');
+      if (nameColIndex === -1) throw new Error('Не найдена колонка "Фамилия Имя"');
+
+      const studentsMap = new Map<number, { id: number; firstName: string; lastName: string; group: string }>();
+      const datesSet = new Set<string>();
+      const gradesMap: Record<number, Record<string, number>> = {};
+
+      dateCols.forEach(d => datesSet.add(d.isoDate));
+
+      // Строки данных (пропускаем строку-заголовок)
+      for (const row of sheet.rows.slice(1)) {
+        const cellByIndex: Record<number, any> = {};
+        for (const cell of row.cells) cellByIndex[cell.columnIndex] = cell.value;
+
+        const fullName = String(cellByIndex[nameColIndex] ?? '').trim();
+        if (!fullName) continue;
+
+        const group = String(cellByIndex[groupColIndex] ?? '').trim();
+
+        // Полное ФИО кладём в firstName, lastName пустой — в БД имя может храниться целиком в firstName
+        const firstName = fullName;
+        const lastName = '';
+
+        // Стабильный числовой id из строки fullName+group
+        const idKey = fullName + '|' + group;
+        let studentId = 0;
+        for (let i = 0; i < idKey.length; i++) {
+          studentId = ((studentId << 5) - studentId) + idKey.charCodeAt(i);
+          studentId |= 0;
+        }
+        studentId = Math.abs(studentId);
+
+        if (!studentsMap.has(studentId)) {
+          studentsMap.set(studentId, { id: studentId, firstName, lastName, group });
+          gradesMap[studentId] = {};
+        }
+
+        for (const { colIndex, isoDate } of dateCols) {
+          const gradeVal = cellByIndex[colIndex];
+          if (gradeVal !== null && gradeVal !== undefined) {
+            gradesMap[studentId][isoDate] = Number(gradeVal);
+          }
+        }
+      }
+
+      const processedData = {
+        students: Array.from(studentsMap.values()),
+        dates: Array.from(datesSet).sort(),
+        grades: gradesMap,
+      };
+
+      if (processedData.students.length === 0) {
+        throw new Error('Не найдено студентов в файле. Проверьте формат таблицы.');
+      }
+
+      setPreviewData(processedData);
+      setUploadMsg(`Таблица загружена, ${processedData.students.length} студентов, ${processedData.dates.length} дат`);
+    } catch (err: any) {
+      console.error(err);
+      setUploadMsg(err.message);
+      setPreviewData(null);
+    } finally {
+      setUploading(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  const clearPreview = () => {
+    setPreviewData(null);
+    setUploadMsg('');
+  };
+
+  const savePreviewToDb = async () => {
+    if (!previewData || !courseId) return;
+    setSaving(true);
+    try {
+      const res = await fetchWithCsrf('/api/grades/save-preview', {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ ...previewData, courseId: Number(courseId) }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Ошибка сохранения');
+      alert(`Сохранено ${result.saved} оценок. Страница перезагрузится.`);
+      window.location.reload();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAddDateColumn = async () => {
+    if (role !== 'TEACHER' && role !== 'ADMIN') return;
     const today = new Date().toISOString().split('T')[0];
-    const newDate = prompt("Введите новую дату в формате ГГГГ-ММ-ДД:", today);
-    if (!newDate) return;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
-      alert('Неверный формат даты. Используйте ГГГГ-ММ-ДД');
+    const newDate = prompt('Введите новую дату в формате ГГГГ-ММ-ДД:', today);
+    if (!newDate || !/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+      if (newDate) alert('Неверный формат даты. Используйте ГГГГ-ММ-ДД');
       return;
     }
     const targetData = previewData || journal;
@@ -162,8 +292,8 @@ export default function Grades() {
       alert('Такая дата уже существует');
       return;
     }
-    const newGrades: Record<number, Record<string, string | null>> = { ...targetData.grades };
-    targetData.students.forEach((student: any) => {
+    const newGrades = { ...targetData.grades };
+    targetData.students.forEach(student => {
       newGrades[student.id] = { ...newGrades[student.id], [newDate]: null };
     });
     const updatedData = {
@@ -171,23 +301,24 @@ export default function Grades() {
       dates: [...targetData.dates, newDate].sort(),
       grades: newGrades,
     };
-    if (previewData) {
-      setPreviewData(updatedData);
-    } else {
-      setJournal(updatedData);
-    }
+    if (previewData) setPreviewData(updatedData);
+    else setJournal(updatedData);
   };
 
   const startEditing = (studentId: number, date: string, currentGrade: string | null) => {
     if (role !== 'TEACHER' && role !== 'ADMIN') return;
+    if (previewData) {
+      alert('В режиме предпросмотра редактирование недоступно. Сначала сохраните журнал.');
+      return;
+    }
     const gradeId = gradeIdMap[studentId]?.[date];
     setEditingCell({ studentId, oldDate: date, gradeId, oldGrade: currentGrade });
-    setTempGrade(currentGrade !== null ? String(currentGrade) : '');
+    setTempGrade(currentGrade ?? '');
     setTempDate(date);
   };
 
   const saveCell = async () => {
-    if (!editingCell) return;
+    if (!editingCell || !courseId) return;
     const { studentId, oldDate, gradeId, oldGrade } = editingCell;
     const newGradeValue = tempGrade.trim();
     const newDate = tempDate;
@@ -208,20 +339,29 @@ export default function Grades() {
       }
 
       if (!gradeId) {
-        const res = await apiFetch(GRADES_URL, {
+        const res = await fetchWithCsrf('/api/grades', {
           method: 'POST',
-          body: JSON.stringify({ studentId, subject: 'Основной предмет', grade: newGradeValue, date: newDate }),
+          headers: JSON_HEADERS,
+          body: JSON.stringify({
+            studentId,
+            courseId: Number(courseId),
+            subject: 'Основной предмет',
+            grade: newGradeValue,
+            date: newDate,
+          }),
         });
         if (!res.ok) throw new Error('Не удалось создать оценку');
         window.location.reload();
         return;
-        }
+      }
 
-      let gradeChanged = false, dateChanged = false;
+      let gradeChanged = false,
+        dateChanged = false;
 
-      if (newGradeValue !== (oldGrade !== null ? String(oldGrade) : '')) {
-        const res = await apiFetch(`${GRADES_URL}/${gradeId}`, {
+      if (newGradeValue !== (oldGrade ?? '')) {
+        const res = await fetchWithCsrf(`/api/grades/${gradeId}`, {
           method: 'PATCH',
+          headers: JSON_HEADERS,
           body: JSON.stringify({ grade: newGradeValue }),
         });
         if (!res.ok) throw new Error('Ошибка обновления оценки');
@@ -229,8 +369,9 @@ export default function Grades() {
       }
 
       if (newDate !== oldDate) {
-        const res = await apiFetch(`${GRADES_URL}/${gradeId}/date`, {
+        const res = await fetchWithCsrf(`/api/grades/${gradeId}/date`, {
           method: 'PATCH',
+          headers: JSON_HEADERS,
           body: JSON.stringify({ date: newDate }),
         });
         if (!res.ok) throw new Error('Ошибка обновления даты');
@@ -274,6 +415,7 @@ export default function Grades() {
       setEditingCell(null);
     } catch (err: any) {
       console.error('Error saving grade:', err);
+      alert(err.message);
     } finally {
       setSavingCell(null);
     }
@@ -281,7 +423,7 @@ export default function Grades() {
 
   const handleDateColumnClick = async (oldDate: string) => {
     if (role !== 'TEACHER' && role !== 'ADMIN') return;
-    if (isPreviewMode) {
+    if (previewData) {
       alert('В режиме предпросмотра нельзя изменить дату. Сначала сохраните журнал.');
       return;
     }
@@ -296,8 +438,9 @@ export default function Grades() {
       return;
     }
     try {
-      const res = await apiFetch('/api/grades/date-column', {
+      const res = await fetchWithCsrf(`/api/grades/course/${courseId}/date-column`, {
         method: 'PATCH',
+        headers: JSON_HEADERS,
         body: JSON.stringify({
           group: selectedGroup,
           subject: 'Основной предмет',
@@ -314,55 +457,6 @@ export default function Grades() {
     }
   };
 
-  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    setUploadMsg('');
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await apiFetch(GRADES_PREVIEW_URL, { method: 'POST', body: formData });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Ошибка загрузки');
-      setPreviewData(data);
-      setUploadMsg(`Таблица загружена, ${data.students.length} студентов, ${data.dates.length} дат`);
-    } catch (err: any) {
-      setUploadMsg(err.message);
-      setPreviewData(null);
-    } finally {
-      setUploading(false);
-      if (e.target) e.target.value = '';
-    }
-  };
-
-  const clearPreview = () => {
-    setPreviewData(null);
-    setUploadMsg('');
-  };
-
-  const savePreviewToDb = async () => {
-    if (!previewData) return;
-    setSaving(true);
-    try {
-      const res = await apiFetch(GRADES_SAVE_PREVIEW_URL, {
-        method: 'POST',
-        body: JSON.stringify(previewData),
-      });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || 'Ошибка сохранения');
-      alert(`Сохранено ${result.saved} оценок. Страница перезагрузится.`);
-      window.location.reload();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const displayData = previewData || journal;
-  const isPreviewMode = !!previewData;
-
   if (!isAuthenticated) {
     return (
       <div className="schedule-empty-state">
@@ -373,31 +467,43 @@ export default function Grades() {
     );
   }
 
+  const displayData = previewData || journal;
+  const isPreviewMode = !!previewData;
+  const showUploadButton = role === 'ADMIN' || role === 'TEACHER';
+
   const heroSection = (
     <section className="schedule-hero">
       <div>
         <span className="schedule-eyebrow">Успеваемость</span>
-        <h2>Журнал оценок</h2>
+        <h2>Журнал оценок курса</h2>
         <p>Просматривайте и редактируйте оценки и даты.</p>
       </div>
       <div className="schedule-hero-actions">
-        {(role === 'ADMIN' || role === 'TEACHER') && (
+        {showUploadButton && (
           <>
-            <button className="schedule-upload-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+            <button
+              className="schedule-upload-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              style={{ marginRight: '12px' }}
+            >
               {uploading ? 'Загрузка...' : 'Загрузить Excel (предпросмотр)'}
             </button>
             {isPreviewMode && (
               <>
-                <button onClick={savePreviewToDb} disabled={saving} style={{ marginLeft: '12px' }}>
+                <button onClick={savePreviewToDb} disabled={saving} style={{ marginRight: '12px' }}>
                   {saving ? 'Сохранение...' : '💾 Сохранить в журнал'}
                 </button>
-                <button onClick={clearPreview} style={{ marginLeft: '12px', padding: '6px 12px' }}>
+                <button onClick={clearPreview} style={{ marginRight: '12px' }}>
                   Вернуться к журналу
                 </button>
               </>
             )}
           </>
         )}
+        <button className="schedule-upload-btn" onClick={() => navigate(`/courses/${courseId}`)}>
+          ← Назад к курсу
+        </button>
       </div>
     </section>
   );
@@ -416,6 +522,7 @@ export default function Grades() {
     return (
       <>
         {heroSection}
+        {fileInputElement}
         <div className="schedule-alert schedule-alert--loading">Загрузка журнала оценок...</div>
       </>
     );
@@ -425,21 +532,24 @@ export default function Grades() {
     return (
       <>
         {heroSection}
+        {fileInputElement}
         <div className="schedule-alert schedule-alert--error">{error}</div>
       </>
     );
   }
 
-  if (!displayData || displayData.students.length === 0) {
+  if (!displayData || !displayData.students || displayData.students.length === 0) {
     return (
       <>
         {heroSection}
         {fileInputElement}
-        {uploading && (
-          <div className="schedule-alert schedule-alert--loading">Загрузка и обработка файла...</div>
-        )}
+        {uploading && <div className="schedule-alert schedule-alert--loading">Загрузка и обработка файла...</div>}
         {uploadMsg && (
-          <div className={`schedule-alert ${uploadMsg.startsWith('Таблица') ? 'schedule-alert--success' : 'schedule-alert--error'}`}>
+          <div
+            className={`schedule-alert ${
+              uploadMsg.startsWith('Таблица') ? 'schedule-alert--success' : 'schedule-alert--error'
+            }`}
+          >
             {uploadMsg}
           </div>
         )}
@@ -447,7 +557,7 @@ export default function Grades() {
           <div className="schedule-empty-state__icon">📊</div>
           <h3>Журнал пуст</h3>
           <p>Данные не найдены или журнал ещё не заполнен.</p>
-          {(role === 'ADMIN' || role === 'TEACHER') && (
+          {showUploadButton && (
             <p style={{ marginTop: '12px' }}>
               Используйте кнопку <strong>«Загрузить Excel (предпросмотр)»</strong> выше.
             </p>
@@ -461,12 +571,19 @@ export default function Grades() {
     <div className="schedule-page">
       {heroSection}
       {fileInputElement}
-      {uploading && (
-        <div className="schedule-alert schedule-alert--loading">Загрузка и обработка файла...</div>
-      )}
+      {uploading && <div className="schedule-alert schedule-alert--loading">Загрузка и обработка файла...</div>}
       {uploadMsg && (
-        <div className={`schedule-alert ${uploadMsg.startsWith('Таблица') ? 'schedule-alert--success' : 'schedule-alert--error'}`}>
+        <div
+          className={`schedule-alert ${
+            uploadMsg.startsWith('Таблица') ? 'schedule-alert--success' : 'schedule-alert--error'
+          }`}
+        >
           {uploadMsg}
+        </div>
+      )}
+      {isPreviewMode && (
+        <div style={{ marginBottom: '16px', padding: '8px', background: '#e0f2fe', borderRadius: '8px', textAlign: 'center' }}>
+          🔍 Режим предпросмотра (данные из Excel, не сохранены в БД)
         </div>
       )}
       {(role === 'TEACHER' || role === 'ADMIN') && groups.length > 0 && !isPreviewMode && (
@@ -477,15 +594,12 @@ export default function Grades() {
             onChange={(e) => setSelectedGroup(e.target.value)}
             style={{ padding: '6px 12px', borderRadius: '8px' }}
           >
-            {groups.map(group => (
-              <option key={group} value={group}>{group}</option>
+            {groups.map((group) => (
+              <option key={group} value={group}>
+                {group}
+              </option>
             ))}
           </select>
-        </div>
-      )}
-      {isPreviewMode && (
-        <div style={{ marginBottom: '16px', padding: '8px', background: '#e0f2fe', borderRadius: '8px', textAlign: 'center' }}>
-          🔍 Режим предпросмотра (данные из Excel, не сохранены в БД)
         </div>
       )}
       <section className="schedule-card">
@@ -493,26 +607,28 @@ export default function Grades() {
           <div className="schedule-file-info">
             <span>Журнал</span>
             <strong>Основной предмет</strong>
-            <small>{displayData.students.length} студентов • {displayData.dates.length} дат</small>
-          </div>
-          <div className="schedule-controls">
-            <span className="schedule-role-badge">
-              Роль:{' '}
-              <strong>
-                {role === 'STUDENT' ? 'Студент' : role === 'TEACHER' ? 'Преподаватель' : 'Администратор'}
-              </strong>
-            </span>
+            <small>
+              {displayData.students.length} студентов • {displayData.dates.length} дат
+            </small>
           </div>
         </div>
-        
-        {/* === НАЧАЛО ИЗМЕНЕНИЙ ДЛЯ СКРОЛЛА === */}
-        <div className="grades-table-container" style={{ overflowX: 'auto', width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+
+        <div
+          className="grades-table-container"
+          style={{ overflowX: 'auto', width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+        >
           <table className="grades-table" style={{ minWidth: '100%', borderCollapse: 'collapse', whiteSpace: 'nowrap' }}>
             <thead>
               <tr className="grades-table__header-row">
-                <th 
+                <th
                   className="grades-table__header grades-table__student-column"
-                  style={{ position: 'sticky', left: 0, backgroundColor: '#f9fafb', zIndex: 20, boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)' }}
+                  style={{
+                    position: 'sticky',
+                    left: 0,
+                    backgroundColor: '#f9fafb',
+                    zIndex: 20,
+                    boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)',
+                  }}
                 >
                   <div>
                     <span className="grades-table__header-eyebrow">Список</span>
@@ -524,7 +640,11 @@ export default function Grades() {
                     key={date}
                     className="grades-table__header"
                     onClick={() => (role === 'TEACHER' || role === 'ADMIN') && !isPreviewMode && handleDateColumnClick(date)}
-                    style={{ cursor: (role === 'TEACHER' || role === 'ADMIN') && !isPreviewMode ? 'pointer' : 'default', minWidth: '120px', textAlign: 'center' }}
+                    style={{
+                      cursor: (role === 'TEACHER' || role === 'ADMIN') && !isPreviewMode ? 'pointer' : 'default',
+                      minWidth: '120px',
+                      textAlign: 'center',
+                    }}
                   >
                     <div>
                       <span className="grades-table__header-eyebrow">Дата</span>
@@ -534,7 +654,9 @@ export default function Grades() {
                 ))}
                 {(role === 'TEACHER' || role === 'ADMIN') && !isPreviewMode && (
                   <th className="grades-table__header grades-table__add-date-column" style={{ minWidth: '60px' }}>
-                    <button onClick={handleAddDateColumn} title="Добавить новую дату" className="add-date-btn">＋</button>
+                    <button onClick={handleAddDateColumn} title="Добавить новую дату" className="add-date-btn">
+                      ＋
+                    </button>
                   </th>
                 )}
               </tr>
@@ -544,12 +666,20 @@ export default function Grades() {
                 const isSavingThisRow = savingCell?.studentId === student.id;
                 return (
                   <tr key={student.id} className="grades-table__row">
-                    <td 
+                    <td
                       className="grades-table__cell grades-table__student-cell"
-                      style={{ position: 'sticky', left: 0, backgroundColor: '#ffffff', zIndex: 10, boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)' }}
+                      style={{
+                        position: 'sticky',
+                        left: 0,
+                        backgroundColor: '#ffffff',
+                        zIndex: 10,
+                        boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)',
+                      }}
                     >
                       <div>
-                        <strong>{student.lastName} {student.firstName}</strong>
+                        <strong>
+                          {student.lastName} {student.firstName}
+                        </strong>
                         <small>ID: {student.id}</small>
                       </div>
                     </td>
@@ -565,9 +695,14 @@ export default function Grades() {
                             background: getGradeColor(grade),
                             cursor: (role === 'TEACHER' || role === 'ADMIN') && !isPreviewMode ? 'pointer' : 'default',
                             minWidth: '120px',
-                            textAlign: 'center'
+                            textAlign: 'center',
                           }}
-                          onClick={() => !isEditing && (role === 'TEACHER' || role === 'ADMIN') && !isPreviewMode && startEditing(student.id, date, grade)}
+                          onClick={() =>
+                            !isEditing &&
+                            (role === 'TEACHER' || role === 'ADMIN') &&
+                            !isPreviewMode &&
+                            startEditing(student.id, date, grade)
+                          }
                         >
                           {isSaving ? (
                             <span className="grades-table__saving">...</span>
@@ -588,8 +723,12 @@ export default function Grades() {
                                 style={{ width: '100%', padding: '4px' }}
                               />
                               <div style={{ display: 'flex', gap: '8px', marginTop: '4px', justifyContent: 'center' }}>
-                                <button onClick={saveCell} style={{ padding: '4px 8px' }}>💾</button>
-                                <button onClick={() => setEditingCell(null)} style={{ padding: '4px 8px' }}>❌</button>
+                                <button onClick={saveCell} style={{ padding: '4px 8px' }}>
+                                  💾
+                                </button>
+                                <button onClick={() => setEditingCell(null)} style={{ padding: '4px 8px' }}>
+                                  ❌
+                                </button>
                               </div>
                             </div>
                           ) : (
@@ -604,7 +743,7 @@ export default function Grades() {
                       );
                     })}
                     {(role === 'TEACHER' || role === 'ADMIN') && !isPreviewMode && (
-                      <td className="grades-table__cell grades-table__grade-cell" style={{ background: '#f9fafb', cursor: 'default', minWidth: '60px' }}></td>
+                      <td className="grades-table__cell grades-table__grade-cell" style={{ background: '#f9fafb', cursor: 'default', minWidth: '60px' }} />
                     )}
                   </tr>
                 );
@@ -612,15 +751,19 @@ export default function Grades() {
             </tbody>
           </table>
         </div>
-        {/* === КОНЕЦ ИЗМЕНЕНИЙ ДЛЯ СКРОЛЛА === */}
 
-        <div className="schedule-empty-state" style={{ marginTop: '24px', background: '#fdf2f8', border: '1px solid #f9a8d4' }}>
+        <div
+          className="schedule-empty-state"
+          style={{ marginTop: '24px', background: '#fdf2f8', border: '1px solid #f9a8d4' }}
+        >
           <div className="schedule-empty-state__icon">🐙</div>
           <h3>Подсказка</h3>
           <p>
             {role === 'STUDENT' && 'Режим только для чтения. Редактирование недоступно.'}
-            {role === 'TEACHER' && 'Кликните по ячейке для изменения оценки. Чтобы добавить новую дату, нажмите кнопку "＋" в заголовке таблицы.'}
-            {role === 'ADMIN' && 'Кликните по ячейке для изменения оценки. Для добавления новой колонки с датой используйте кнопку "＋".'}
+            {role === 'TEACHER' &&
+              'Кликните по ячейке для изменения оценки. Чтобы добавить новую дату, нажмите кнопку "＋" в заголовке таблицы. Для загрузки Excel используйте соответствующую кнопку.'}
+            {role === 'ADMIN' &&
+              'Кликните по ячейке для изменения оценки. Для добавления новой колонки с датой используйте кнопку "＋". Для загрузки Excel используйте соответствующую кнопку.'}
           </p>
         </div>
       </section>

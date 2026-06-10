@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS app_users (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- NOTIFICATIONS (добавлено для уведомлений об изменениях расписания и др.)
+-- NOTIFICATIONS
 CREATE TABLE IF NOT EXISTS notifications (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES app_users(user_id) ON DELETE CASCADE,
@@ -23,22 +23,22 @@ CREATE TABLE IF NOT EXISTS notifications (
     type VARCHAR(255) NOT NULL
 );
 
--- Индексы для уведомлений (оптимизация запросов)
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
 
--- GRADES
+-- GRADES (исправленная версия с course_id)
 CREATE TABLE IF NOT EXISTS grades (
     id SERIAL PRIMARY KEY,
     student_id INTEGER NOT NULL REFERENCES app_users(user_id),
+    course_id INTEGER NOT NULL REFERENCES courses(course_id) ON DELETE CASCADE,
     subject VARCHAR(255) NOT NULL,
     grade VARCHAR(50) NOT NULL,
     date DATE NOT NULL,
     teacher_id INTEGER REFERENCES app_users(user_id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uk_student_subject_date UNIQUE (student_id, subject, date)
+    CONSTRAINT uk_student_subject_date_course UNIQUE (student_id, subject, date, course_id)
 );
 
 -- SCHEDULE UPLOADS
@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS course_materials (
     section_id INTEGER NOT NULL REFERENCES course_sections(section_id) ON DELETE CASCADE,
     title VARCHAR(255) NOT NULL,
     description TEXT,
-    material_type VARCHAR(50) NOT NULL, -- 'FILE', 'ASSIGNMENT', 'LINK', 'TEXT', 'TEST'
+    material_type VARCHAR(50) NOT NULL,
     file_path TEXT,
     external_url TEXT,
     due_date TIMESTAMP WITH TIME ZONE,
@@ -150,6 +150,7 @@ CREATE TABLE IF NOT EXISTS student_answers (
     selected_option_id BIGINT NOT NULL REFERENCES answer_options(id) ON DELETE CASCADE
 );
 
--- Дополнительные индексы (для производительности)
+-- Индексы
 CREATE INDEX IF NOT EXISTS idx_materials_section ON course_materials(section_id);
 CREATE INDEX IF NOT EXISTS idx_submissions_material_user ON material_submissions(material_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_grades_course ON grades(course_id);

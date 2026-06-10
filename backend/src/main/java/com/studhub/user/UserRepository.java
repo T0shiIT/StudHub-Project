@@ -32,4 +32,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByFirstNameAndLastNameAndGroupName(@Param("firstName") String firstName,
                                                           @Param("lastName") String lastName,
                                                           @Param("groupName") String groupName);
+
+    @Query("SELECT DISTINCT u.groupName FROM User u WHERE u.id IN (SELECT e.userId FROM Enrollment e WHERE e.courseId = :courseId) AND u.groupName IS NOT NULL")
+    List<String> findDistinctGroupNamesByCourseId(@Param("courseId") Long courseId);
 }
