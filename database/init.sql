@@ -150,6 +150,17 @@ CREATE TABLE IF NOT EXISTS student_answers (
     selected_option_id BIGINT NOT NULL REFERENCES answer_options(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS announcements (
+    id         VARCHAR(36) PRIMARY KEY,
+    user_id    VARCHAR(50),
+    user_name  VARCHAR(255),
+    user_group VARCHAR(100),
+    content    TEXT,
+    image_url  TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    role       VARCHAR(50)
+);
+
 -- Индексы
 CREATE INDEX IF NOT EXISTS idx_materials_section ON course_materials(section_id);
 CREATE INDEX IF NOT EXISTS idx_submissions_material_user ON material_submissions(material_id, user_id);
