@@ -368,4 +368,46 @@ public class ScheduleController {
         }
         return fileName.substring(idx).toLowerCase();
     }
+
+    @PostMapping("/upload-json")
+    public ResponseEntity<?> uploadScheduleJson(@RequestBody Map<String, Object> payload,
+                                                Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(401).body(Map.of("error", "Пользователь не авторизован"));
+        }
+
+        User currentUser = resolveCurrentUser(authentication).orElse(null);
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Пользователь не найден"));
+        }
+
+        if (!ADMIN_ROLE.equalsIgnoreCase(currentUser.getRole())) {
+            return ResponseEntity.status(403).body(Map.of("error", "Нет прав: требуется роль ADMIN"));
+        }
+
+        String fileName   = (String) payload.get("file_name");
+        String fileType   = (String) payload.get("file_type");
+        Object scheduleJson = payload.get("schedule_json");
+
+        if (fileName == null || fileType == null || scheduleJson == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Отсутствуют обязательные поля"));
+        }
+
+        Map<String, Object> cppPayload = new LinkedHashMap<>();
+        cppPayload.put("file_name",     fileName);
+        cppPayload.put("file_type",     fileType);
+        cppPayload.put("uploaded_by",   currentUser.getEmail());
+        cppPayload.put("schedule_json", scheduleJson);
+
+        CppUserClient.Result saveResult = cppUserClient.uploadSchedule(currentUser.getId(), cppPayload);
+        if (!saveResult.isSuccess()) {
+            return ResponseEntity.status(saveResult.status()).body(saveResult.body());
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("status",   "ok");
+        response.put("id",       saveResult.body().get("id"));
+        response.put("replaced", saveResult.body().get("replaced"));
+        return ResponseEntity.ok(response);
+    }
 }

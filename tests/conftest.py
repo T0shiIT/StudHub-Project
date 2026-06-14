@@ -1,0 +1,84 @@
+import uuid
+import pytest
+import requests
+
+BASE_URL = "http://localhost:8080"
+CHAT_URL = "ws://localhost:9000"
+BYPASS   = "admin"
+
+@pytest.fixture(scope="function")
+def admin_once():
+    """Admin только для тестов которые меняют его роль."""
+    return register_and_login(role_code=BYPASS)
+
+def make_user_payload(role_code: str = "") -> dict:
+    uid = uuid.uuid4().hex[:8]
+    payload = {
+        "email":     f"test_{uid}@gmail.com",
+        "firstName": "Test",
+        "lastName":  "User",
+        "login":     f"user_{uid}",
+        "group":     "ПИ-2025",
+        "password":  "Passw0rd!",
+    }
+    if role_code:
+        payload["code"] = role_code
+    return payload
+
+
+def register_and_login(role_code: str = "") -> dict:
+    """Регистрирует пользователя, логинится, возвращает dict с session."""
+    session = requests.Session()
+    data = make_user_payload(role_code)
+
+    reg = session.post(f"{BASE_URL}/api/auth/register", json=data, timeout=30)
+    assert reg.status_code == 201, f"Регистрация провалилась: {reg.text}"
+    body = reg.json()
+
+    #Явный логин (сессия после регистрации может не сохраняться)
+    login = session.post(
+        f"{BASE_URL}/api/auth/login",
+        json={"email": data["email"], "password": data["password"]},
+        timeout=10,
+    )
+    assert login.status_code == 200, f"Логин провалился: {login.text}"
+
+    return {
+        "id":       body["id"],
+        "email":    data["email"],
+        "login":    data["login"],
+        "password": data["password"],
+        "role":     body.get("role", "STUDENT"),
+        "session":  session,
+    }
+
+@pytest.fixture(scope="session")
+def student():
+    return register_and_login()
+
+
+@pytest.fixture(scope="session")
+def admin():
+    user = register_and_login(role_code=BYPASS)
+    return user
+
+
+@pytest.fixture(scope="session")
+def teacher():
+    """Создаём как ADMIN, потом меняем роль на TEACHER."""
+    user = register_and_login(role_code=BYPASS)
+    sess = user["session"]
+
+    # Получаем CSRF
+    sess.get(f"{BASE_URL}/api/user", timeout=10)
+    csrf = sess.cookies.get("XSRF-TOKEN")
+
+    r = sess.post(
+        f"{BASE_URL}/api/user/change-role",
+        json={"target_user_id": str(user["id"]), "role": "TEACHER"},
+        headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+        timeout=10,
+    )
+    assert r.status_code == 200, f"Смена роли на TEACHER провалилась: {r.text}"
+    user["role"] = "TEACHER"
+    return user

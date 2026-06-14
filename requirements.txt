@@ -1,2 +1,5 @@
 pytest
 requests
+websocket-client
+openpyxl 
+pytest-timeout 

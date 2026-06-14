@@ -40,12 +40,22 @@ public class GradeController {
 
     @GetMapping
     public ResponseEntity<?> getGrades(@RequestParam(required = false) String group,
-                                       @RequestParam(required = false) String subject,
-                                       Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
+                                    @RequestParam(required = false) String subject,
+                                    Authentication auth) {
+        System.out.println("=== GRADES DEBUG ===");
+        System.out.println("auth: " + auth);
+        System.out.println("auth.getName(): " + (auth != null ? auth.getName() : "NULL"));
+
+        if (auth == null || !auth.isAuthenticated())
+            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
 
         String email = auth.getName();
-        User currentUser = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
+        System.out.println("Looking for email: " + email);
+
+        Optional<User> userOpt = userRepository.findByEmail(email);
+        System.out.println("User found: " + userOpt.isPresent());
+
+        User currentUser = userOpt.orElseThrow(() -> new RuntimeException("User not found"));
 
         if ("STUDENT".equalsIgnoreCase(currentUser.getRole())) {
             return ResponseEntity.ok(gradeService.getGradesForStudent(currentUser.getId()));

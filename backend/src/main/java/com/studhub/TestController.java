@@ -9,6 +9,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Set;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -44,22 +45,59 @@ public class TestController {
         return Map.of("error", "Email not found");
     }
 
+    // @PostMapping("/api/user/change-role")
+    // public ResponseEntity<?> changeUserRole(@RequestBody Map<String, String> payload, Authentication authentication) {
+    //     if (authentication == null || !authentication.isAuthenticated()) return ResponseEntity.status(401).body("Unauthorized");
+
+    //     String targetUserIdStr = payload.get("target_user_id");
+    //     String newRole = payload.get("role");
+
+    //     if (targetUserIdStr == null || newRole == null) return ResponseEntity.badRequest().body("Missing target_user_id or role");
+
+    //     Long targetUserId;
+    //     try { targetUserId = Long.parseLong(targetUserIdStr); } 
+    //     catch (NumberFormatException e) { return ResponseEntity.badRequest().body("Invalid target_user_id"); }
+
+    //     String email = authentication.getName();
+    //     User admin = userRepository.findByEmail(email).orElse(null);
+    //     if (admin == null || !"ADMIN".equalsIgnoreCase(admin.getRole())) return ResponseEntity.status(403).body("Forbidden");
+
+    //     CppUserClient.Result result = cppUserClient.changeUserRole(targetUserId, newRole);
+    //     if (!result.isSuccess()) return ResponseEntity.status(result.status()).body(result.body());
+
+    //     userRepository.findById(targetUserId).ifPresent(user -> {
+    //         user.setRole(newRole.toUpperCase());
+    //         userRepository.save(user);
+    //     });
+
+    //     return ResponseEntity.ok(Map.of("message", "Role updated"));
+    // }
+
     @PostMapping("/api/user/change-role")
     public ResponseEntity<?> changeUserRole(@RequestBody Map<String, String> payload, Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) return ResponseEntity.status(401).body("Unauthorized");
+        if (authentication == null || !authentication.isAuthenticated()) 
+            return ResponseEntity.status(401).body("Unauthorized");
 
         String targetUserIdStr = payload.get("target_user_id");
         String newRole = payload.get("role");
 
-        if (targetUserIdStr == null || newRole == null) return ResponseEntity.badRequest().body("Missing target_user_id or role");
+        if (targetUserIdStr == null || newRole == null) 
+            return ResponseEntity.badRequest().body("Missing target_user_id or role");
+
+        // ← ДОБАВИТЬ валидацию допустимых ролей
+        Set<String> allowedRoles = Set.of("STUDENT", "TEACHER", "ADMIN");
+        if (!allowedRoles.contains(newRole.toUpperCase())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Invalid role: " + newRole));
+        }
 
         Long targetUserId;
-        try { targetUserId = Long.parseLong(targetUserIdStr); } 
+        try { targetUserId = Long.parseLong(targetUserIdStr); }
         catch (NumberFormatException e) { return ResponseEntity.badRequest().body("Invalid target_user_id"); }
 
         String email = authentication.getName();
         User admin = userRepository.findByEmail(email).orElse(null);
-        if (admin == null || !"ADMIN".equalsIgnoreCase(admin.getRole())) return ResponseEntity.status(403).body("Forbidden");
+        if (admin == null || !"ADMIN".equalsIgnoreCase(admin.getRole())) 
+            return ResponseEntity.status(403).body("Forbidden");
 
         CppUserClient.Result result = cppUserClient.changeUserRole(targetUserId, newRole);
         if (!result.isSuccess()) return ResponseEntity.status(result.status()).body(result.body());
