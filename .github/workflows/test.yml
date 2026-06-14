@@ -50,7 +50,7 @@ name: CI Tests
  
 on:
   push:
-    branches: ["development", "main"]
+    branches: ["development", "main", "che", "final_test"]
   pull_request:
  
 jobs:
