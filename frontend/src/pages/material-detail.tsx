@@ -23,10 +23,11 @@ export default function MaterialDetailPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [status, setStatus] = useState<string>('Загрузка...');
+  const [status, setStatus] = useState<string>('Надо сделать');
   const [testCompleted, setTestCompleted] = useState(false);
   const [testScore, setTestScore] = useState<number | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
   const loadMaterial = async () => {
     setLoading(true);
@@ -57,7 +58,7 @@ export default function MaterialDetailPage() {
       if (res.ok) {
         const data = await res.json();
         setSubmitted(data.completed);
-        setStatus(data.status);
+        setStatus(data.status || (data.completed ? 'Выполнено' : 'Надо сделать'));
       }
     } catch (error) {
       console.error('Failed to check status', error);
@@ -77,11 +78,14 @@ export default function MaterialDetailPage() {
     }
   };
 
-  const handleUpload = async () => {
-    if (!selectedFile) {
-      alert('Выберите файл');
-      return;
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setSelectedFile(e.target.files[0]);
     }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) return;
 
     setUploading(true);
     try {
@@ -98,7 +102,8 @@ export default function MaterialDetailPage() {
         setStatus('Выполнено');
         setSelectedFile(null);
         setFileInputKey(k => k + 1);
-        alert('Файл успешно загружен!');
+        setSubmitSuccess(true);
+        setTimeout(() => setSubmitSuccess(false), 3000);
         setTimeout(() => loadMaterial(), 500);
       } else {
         const err = await res.text();
@@ -124,110 +129,177 @@ export default function MaterialDetailPage() {
     return () => window.removeEventListener('pageshow', handlePageShow);
   }, []);
 
-  if (loading) return <div className="material-detail-page">Загрузка...</div>;
-  if (!material) return <div className="material-detail-page">Материал не найден</div>;
+  const getStatusBadgeClass = () => {
+    if (material?.materialType === 'TEST') {
+      return testCompleted ? 'status-badge--done' : 'status-badge--todo';
+    } else {
+      return submitted ? 'status-badge--done' : 'status-badge--todo';
+    }
+  };
+
+  const getStatusLabel = () => {
+    if (material?.materialType === 'TEST') {
+      return testCompleted ? 'Пройден' : 'Не пройден';
+    } else {
+      return submitted ? 'Выполнено' : (status || 'Надо сделать');
+    }
+  };
+
+  if (loading) return <div className="material-detail-page" style={{padding:40,textAlign:'center'}}>Загрузка...</div>;
+  if (!material) return <div className="material-detail-page" style={{padding:40,textAlign:'center'}}>Материал не найден</div>;
 
   return (
     <div className="material-detail-page">
-      <button className="btn-back" onClick={() => navigate(`/courses/${courseId}`)}>
+      <button className="btn-back" onClick={() => navigate(`/courses/${courseId}`)} style={{marginBottom:20}}>
         ← Назад к курсу
       </button>
 
       <div className="material-card">
-        <h1>{material.title}</h1>
-
-        {material.description && (
-          <div className="material-description">
-            <h3>Описание</h3>
-            <p>{material.description}</p>
+        <div className="material-header">
+          <div>
+            <h1>{material.title}</h1>
+            {material.description && <p style={{color:'#64748b', marginTop:6}}>{material.description}</p>}
           </div>
-        )}
-
-        {material.dueDate && (
-          <div className="material-info">
-            <strong>📅 Срок сдачи:</strong>
-            <span>{new Date(material.dueDate).toLocaleString('ru-RU')}</span>
-          </div>
-        )}
-
-        {material.materialType === 'ASSIGNMENT' && (
-          <div className="assignment-section">
-            <div className="status-block">
-              <strong>Статус:</strong>
-              <span className={`status ${submitted ? 'done' : 'todo'}`}>
-                {submitted ? '✅ Выполнено' : '❌ ' + status}
+          <div className="meta">
+            <span className={`status-badge ${getStatusBadgeClass()}`}>
+              {getStatusLabel()}
+            </span>
+            {material.dueDate && (
+              <span style={{fontSize:13, color:'#94a3b8'}}>
+                📅 {new Date(material.dueDate).toLocaleDateString('ru-RU')}
               </span>
-            </div>
-
-            {material.filePath && (
-              <div className="download-section">
-                <a href={`http://localhost:8080/api/materials/download/${material.id}`} className="btn-secondary">
-                  📄 Скачать файл задания
-                </a>
-              </div>
             )}
+          </div>
+        </div>
 
-            {!submitted ? (
-              <div className="submit-section">
-                <h3>Загрузить решение</h3>
-                <input
-                  key={fileInputKey}
-                  type="file"
-                  className="file-input"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] || null;
-                    setSelectedFile(file);
-                  }}
-                />
+        <div className="material-body">
+          {material.materialType === 'ASSIGNMENT' && (
+            <>
+              {material.filePath && (
+                <div style={{marginBottom:16}}>
+                  <a href={`http://localhost:8080/api/materials/download/${material.id}`} className="btn-secondary">
+                    📄 Скачать файл задания
+                  </a>
+                </div>
+              )}
+
+              {!submitted ? (
+                <>
+                  <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:12}}>
+                    <span style={{fontWeight:600}}>Загрузить решение</span>
+                  </div>
+
+                  <label className="upload-area" htmlFor="file-upload">
+                    <span className="icon">📤</span>
+                    <span className="title">Выберите файл</span>
+                    <span className="hint">или перетащите его сюда</span>
+                    <span className="hint" style={{fontSize:11}}>PDF, DOC, DOCX, ZIP, RAR (макс. 20 МБ)</span>
+                    <input
+                      key={fileInputKey}
+                      type="file"
+                      id="file-upload"
+                      style={{display:'none'}}
+                      onChange={handleFileChange}
+                      accept=".pdf,.doc,.docx,.zip,.rar"
+                    />
+                  </label>
+
+                  {selectedFile && (
+                    <div className="file-preview" style={{marginTop:12}}>
+                      <span style={{fontSize:20}}>📄</span>
+                      <span className="name">{selectedFile.name}</span>
+                      <span className="size">{(selectedFile.size / 1024).toFixed(1)} КБ</span>
+                      <button className="remove" onClick={() => setSelectedFile(null)}>✕</button>
+                    </div>
+                  )}
+
+                  <button
+                    className="btn-submit"
+                    onClick={handleUpload}
+                    disabled={!selectedFile || uploading}
+                    style={{marginTop:16}}
+                  >
+                    {uploading ? (
+                      <>
+                        <span className="spinner"></span> Отправка...
+                      </>
+                    ) : 'Отправить работу'}
+                  </button>
+
+                  {submitSuccess && (
+                    <div className="submit-success" style={{marginTop:12}}>
+                      ✅ Работа успешно отправлена!
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="submit-success">
+                  ✅ Работа сдана
+                </div>
+              )}
+            </>
+          )}
+
+          {material.materialType === 'TEST' && (
+            <>
+              {testCompleted ? (
+                <div style={{textAlign:'center', padding:'20px 0'}}>
+                  <div style={{fontSize:48, marginBottom:8}}>✅</div>
+                  <p style={{fontSize:20, fontWeight:600, color:'#065f46'}}>Тест пройден</p>
+                  <p style={{fontSize:32, fontWeight:700, color:'#065f46'}}>{testScore}%</p>
+                  <button
+                    className="btn-primary"
+                    onClick={() => navigate(`/courses/${courseId}/materials/${materialId}/result`)}
+                    style={{marginTop:12}}
+                  >
+                    Посмотреть результат
+                  </button>
+                </div>
+              ) : (
                 <button
                   className="btn-primary"
-                  onClick={handleUpload}
-                  disabled={uploading || !selectedFile}
+                  onClick={() => navigate(`/courses/${courseId}/materials/${materialId}/test`)}
+                  style={{padding:'12px 32px', fontSize:16}}
                 >
-                  {uploading ? 'Загрузка...' : 'Отправить работу'}
+                  🧪 Пройти тест
                 </button>
-              </div>
-            ) : (
-              <div className="submitted-block">
-                <p className="success">✓ Работа отправлена</p>
+              )}
+            </>
+          )}
+
+          {material.materialType === 'FILE' && material.filePath && (
+            <div style={{textAlign:'center', padding:16}}>
+              <a href={`http://localhost:8080/api/materials/download/${material.id}`} className="btn-primary">
+                📄 Скачать файл
+              </a>
+            </div>
+          )}
+
+          {material.materialType === 'LINK' && material.externalUrl && (
+            <div style={{textAlign:'center', padding:16}}>
+              <a href={material.externalUrl} target="_blank" rel="noopener noreferrer" className="btn-primary">
+                🔗 Перейти по ссылке
+              </a>
+            </div>
+          )}
+
+          <div className="info-grid">
+            <div className="info-card">
+              <span className="label">Тип</span>
+              <span className="value">{material.materialType.toLowerCase()}</span>
+            </div>
+            <div className="info-card">
+              <span className="label">Статус</span>
+              <span className="value">{getStatusLabel()}</span>
+            </div>
+            {material.dueDate && (
+              <div className="info-card">
+                <span className="label">Дедлайн</span>
+                <span className="value">{new Date(material.dueDate).toLocaleDateString('ru-RU')}</span>
               </div>
             )}
           </div>
-        )}
-
-        {material.materialType === 'TEST' && (
-          <div className="test-section">
-            {!testCompleted ? (
-              <button
-                className="btn-primary"
-                onClick={() => navigate(`/courses/${courseId}/materials/${materialId}/test`)}
-              >
-                🧪 Пройти тест
-              </button>
-            ) : (
-              <div className="test-result-block">
-                <p className="success">✓ Тест пройден</p>
-                <p>Ваш результат: <strong>{testScore}%</strong></p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {material.materialType === 'FILE' && material.filePath && (
-          <div className="download-section">
-            <a href={`http://localhost:8080/api/materials/download/${material.id}`} className="btn-primary">
-              📄 Скачать файл
-            </a>
-          </div>
-        )}
-
-        {material.materialType === 'LINK' && material.externalUrl && (
-          <div className="link-section">
-            <a href={material.externalUrl} target="_blank" rel="noopener noreferrer" className="btn-primary">
-              🔗 Перейти по ссылке
-            </a>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );

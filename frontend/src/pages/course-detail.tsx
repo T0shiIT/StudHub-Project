@@ -152,13 +152,13 @@ export default function CourseDetailPage() {
 
   if (!loading && course && user?.role === 'STUDENT' && course.status === 'INACTIVE') {
     return (
-      <div className="course-detail-page">
-        <div className="course-header">
-          <button className="btn-back" onClick={() => navigate('/courses')}>← Назад к курсам</button>
-        </div>
-        <div style={{ textAlign: 'center', padding: '50px' }}>
-          <h2>Курс временно недоступен</h2>
-          <p>Преподаватель закрыл доступ к этому курсу.</p>
+      <div className="cd-page">
+        <div className="cd-hero">
+          <button className="cd-back-btn" onClick={() => navigate('/courses')}>← Назад к курсам</button>
+          <div style={{ textAlign: 'center', padding: '50px' }}>
+            <h2>Курс временно недоступен</h2>
+            <p>Преподаватель закрыл доступ к этому курсу.</p>
+          </div>
         </div>
       </div>
     );
@@ -289,102 +289,136 @@ export default function CourseDetailPage() {
   if (!course) return <div className="dashboard-loading">Курс не найден</div>;
 
   return (
-    <div className="course-detail-page">
-      {course.coverImage && <div className="detail-cover" style={{ backgroundImage: `url(${course.coverImage})` }} />}
-
-      <div className="course-header">
-        <button className="btn-back" onClick={() => navigate('/courses')}>← Назад к курсам</button>
-        <div className="course-title-section">
-          <h1>{course.title}</h1>
-          <p className="course-teacher">👨‍🏫 {course.teacherName}</p>
+    <div className="cd-page">
+      {/* ── HERO ── */}
+      <section className="cd-hero">
+        <div className="cd-hero-left">
+          <button className="cd-back-btn" onClick={() => navigate('/courses')}>← Назад к курсам</button>
+          <span className="cd-eyebrow">Курс</span>
+          <h1 className="cd-title">{course.title}</h1>
+          <p className="cd-subtitle">👨‍🏫 {course.teacherName}</p>
         </div>
-        <div className="course-actions-header">
+
+        <div className="cd-hero-right">
           {isTeacher && (
-            <button className="btn-edit" onClick={() => navigate(`/courses/${id}/edit`)}>Редактировать курс</button>
+            <button
+              className="cd-action-btn cd-action-btn--amber"
+              onClick={() => navigate(`/courses/${id}/edit`)}
+            >
+              Редактировать курс
+            </button>
           )}
           {canViewGrades && (
             <button
+              className="cd-action-btn cd-action-btn--purple"
               onClick={() => navigate(`/courses/${id}/grades`)}
-              className="btn-edit"
-              style={{ background: '#8b5cf6' }}
             >
               📊 Журнал
             </button>
           )}
         </div>
-      </div>
 
-      <div className="course-content">
-        <div className="course-description">
-          <h2>О курсе</h2>
+        {course.coverImage && (
+          <div
+            className="cd-hero-cover"
+            style={{ backgroundImage: `url(${course.coverImage})` }}
+          />
+        )}
+      </section>
+
+      {/* ── ABOUT + PROGRESS ── */}
+      <section className="cd-card">
+        <div className="cd-about">
+          <span className="cd-section-eyebrow">О курсе</span>
           <p>{course.description || 'Описание отсутствует'}</p>
         </div>
 
         {progress && progress.hasGradedMaterials && (
-          <div className="course-progress-bar">
-            <span>Ваш прогресс: {progress.percent}%</span>
-            <div className="progress-bg">
-              <div className="progress-fill" style={{ width: `${progress.percent}%` }} />
+          <div className="cd-progress-block">
+            <div className="cd-progress-header">
+              <span className="cd-section-eyebrow">Ваш прогресс</span>
+              <strong className="cd-progress-value">{progress.percent}%</strong>
+            </div>
+            <div className="cd-progress-track">
+              <div className="cd-progress-fill" style={{ width: `${progress.percent}%` }} />
             </div>
           </div>
         )}
+      </section>
 
-        <div className="moodle-sections">
-          {isTeacher && (
-            <div className="create-section">
-              <input
-                type="text"
-                placeholder="Название новой темы"
-                value={newSectionTitle}
-                onChange={(e) => setNewSectionTitle(e.target.value)}
-              />
-              <button className="btn-primary" onClick={createSection}>+ Создать тему</button>
-            </div>
-          )}
+      {/* ── SECTIONS ── */}
+      <section className="cd-card cd-sections-card">
+        {isTeacher && (
+          <div className="cd-create-section">
+            <input
+              type="text"
+              className="cd-input"
+              placeholder="Название новой темы"
+              value={newSectionTitle}
+              onChange={(e) => setNewSectionTitle(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && createSection()}
+            />
+            <button className="cd-action-btn cd-action-btn--blue" onClick={createSection}>
+              + Создать тему
+            </button>
+          </div>
+        )}
 
-          {sections.length === 0 && <div className="empty">Тем пока нет</div>}
+        {sections.length === 0 && (
+          <div className="cd-empty">Тем пока нет</div>
+        )}
 
+        <div className="cd-sections-list">
           {sections.map((section) => (
-            <div key={section.id} className="moodle-section">
-              <div className="section-header" onClick={() => toggleSection(section.id)}>
-                <span className="section-toggle-icon">{openedSections[section.id] ? '▾' : '▸'}</span>
-                <h3>{section.title}</h3>
-                <div className="section-actions">
-                  {isTeacher && (
-                    <>
-                      <button
-                        className="btn-small"
-                        onClick={(e) => { e.stopPropagation(); setShowMaterialForm(showMaterialForm === section.id ? null : section.id); }}
-                      >
-                        + Материал
-                      </button>
-                      <button
-                        className="btn-small btn-danger-small"
-                        onClick={(e) => { e.stopPropagation(); deleteSection(section.id); }}
-                      >
-                        🗑️
-                      </button>
-                    </>
-                  )}
+            <div key={section.id} className="cd-section">
+              {/* Section header */}
+              <div className="cd-section-header" onClick={() => toggleSection(section.id)}>
+                <span className="cd-section-toggle">
+                  {openedSections[section.id] ? '▾' : '▸'}
+                </span>
+                <h3 className="cd-section-title">{section.title}</h3>
+                <div className="cd-section-count">
+                  {(materials[section.id]?.length ?? 0)}
                 </div>
+                {isTeacher && (
+                  <div className="cd-section-actions" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="cd-action-btn cd-action-btn--blue cd-action-btn--sm"
+                      onClick={() => setShowMaterialForm(showMaterialForm === section.id ? null : section.id)}
+                    >
+                      + Материал
+                    </button>
+                    <button
+                      className="cd-action-btn cd-action-btn--red cd-action-btn--sm"
+                      onClick={() => deleteSection(section.id)}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                )}
               </div>
 
+              {/* Section body */}
               {openedSections[section.id] && (
-                <div className="section-materials">
+                <div className="cd-section-body">
+                  {/* Material creation form */}
                   {showMaterialForm === section.id && (
-                    <div className="material-form">
+                    <div className="cd-material-form">
                       <input
                         type="text"
+                        className="cd-input"
                         placeholder="Название материала"
                         value={newMaterial.title}
                         onChange={(e) => setNewMaterial({ ...newMaterial, title: e.target.value })}
                       />
                       <textarea
+                        className="cd-input cd-textarea"
                         placeholder="Описание"
                         value={newMaterial.description}
                         onChange={(e) => setNewMaterial({ ...newMaterial, description: e.target.value })}
                       />
                       <select
+                        className="cd-input"
                         value={newMaterial.materialType}
                         onChange={(e) => setNewMaterial({ ...newMaterial, materialType: e.target.value })}
                       >
@@ -396,12 +430,12 @@ export default function CourseDetailPage() {
                       </select>
 
                       {(newMaterial.materialType === 'FILE' || newMaterial.materialType === 'ASSIGNMENT') && (
-                        <div className="file-upload-section">
-                          <label>📎 Прикрепить файл:</label>
+                        <div className="cd-file-upload">
+                          <label>📎 Прикрепить файл</label>
                           <input
                             type="file"
+                            className="cd-input"
                             onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                            className="file-input"
                           />
                         </div>
                       )}
@@ -409,6 +443,7 @@ export default function CourseDetailPage() {
                       {newMaterial.materialType === 'LINK' && (
                         <input
                           type="url"
+                          className="cd-input"
                           placeholder="https://example.com"
                           value={newMaterial.externalUrl || ''}
                           onChange={(e) => setNewMaterial({ ...newMaterial, externalUrl: e.target.value })}
@@ -418,67 +453,73 @@ export default function CourseDetailPage() {
                       {newMaterial.materialType === 'ASSIGNMENT' && (
                         <input
                           type="datetime-local"
+                          className="cd-input"
                           value={newMaterial.dueDate}
                           onChange={(e) => setNewMaterial({ ...newMaterial, dueDate: e.target.value })}
                         />
                       )}
 
                       {newMaterial.materialType === 'TEST' && (
-                        <div className="test-builder">
-                          <h4>Конструктор теста</h4>
+                        <div className="cd-test-builder">
+                          <span className="cd-section-eyebrow">Конструктор теста</span>
                           {testQuestions.length > 0 && (
-                            <div className="added-questions">
-                              <strong>Добавленные вопросы:</strong>
+                            <div className="cd-added-questions">
                               {testQuestions.map((q, idx) => (
-                                <div key={idx} className="added-question">
+                                <div key={idx} className="cd-added-question">
                                   <span>{idx + 1}. {q.text}</span>
-                                  <button type="button" onClick={() => removeQuestion(idx)}>🗑️</button>
+                                  <button type="button" onClick={() => removeQuestion(idx)} className="cd-icon-btn">🗑️</button>
                                 </div>
                               ))}
                             </div>
                           )}
-                          <div className="new-question">
-                            <input
-                              type="text"
-                              placeholder="Текст вопроса"
-                              value={currentQuestion.text}
-                              onChange={(e) => setCurrentQuestion({ ...currentQuestion, text: e.target.value })}
-                            />
-                            <div className="options-list">
-                              {currentQuestion.options.map((opt, idx) => (
-                                <div key={idx} className="option-row">
+                          <input
+                            type="text"
+                            className="cd-input"
+                            placeholder="Текст вопроса"
+                            value={currentQuestion.text}
+                            onChange={(e) => setCurrentQuestion({ ...currentQuestion, text: e.target.value })}
+                          />
+                          <div className="cd-options-list">
+                            {currentQuestion.options.map((opt, idx) => (
+                              <div key={idx} className="cd-option-row">
+                                <input
+                                  type="text"
+                                  className="cd-input"
+                                  placeholder={`Вариант ${idx + 1}`}
+                                  value={opt}
+                                  onChange={(e) => updateOption(idx, e.target.value)}
+                                />
+                                <label className="cd-radio-label">
                                   <input
-                                    type="text"
-                                    placeholder={`Вариант ${idx + 1}`}
-                                    value={opt}
-                                    onChange={(e) => updateOption(idx, e.target.value)}
-                                  />
-                                  <label>
-                                    <input
-                                      type="radio"
-                                      name="correctOption"
-                                      checked={currentQuestion.correctIndex === idx}
-                                      onChange={() => setCurrentQuestion({ ...currentQuestion, correctIndex: idx })}
-                                    /> Правильный
-                                  </label>
-                                  {currentQuestion.options.length > 2 && (
-                                    <button type="button" onClick={() => removeOption(idx)}>✖</button>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                            <div className="question-actions">
-                              <button type="button" onClick={addOption}>+ Добавить вариант</button>
-                              <button type="button" onClick={addQuestion}>➕ Добавить вопрос</button>
-                            </div>
+                                    type="radio"
+                                    name="correctOption"
+                                    checked={currentQuestion.correctIndex === idx}
+                                    onChange={() => setCurrentQuestion({ ...currentQuestion, correctIndex: idx })}
+                                  /> Верный
+                                </label>
+                                {currentQuestion.options.length > 2 && (
+                                  <button type="button" onClick={() => removeOption(idx)} className="cd-icon-btn">✖</button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="cd-form-row">
+                            <button type="button" className="cd-action-btn cd-action-btn--ghost" onClick={addOption}>
+                              + Вариант
+                            </button>
+                            <button type="button" className="cd-action-btn cd-action-btn--blue" onClick={addQuestion}>
+                              ➕ Добавить вопрос
+                            </button>
                           </div>
                         </div>
                       )}
 
-                      <div className="form-actions">
-                        <button className="btn-primary" onClick={() => createMaterial(section.id)}>Создать</button>
+                      <div className="cd-form-row">
+                        <button className="cd-action-btn cd-action-btn--blue" onClick={() => createMaterial(section.id)}>
+                          Создать
+                        </button>
                         <button
-                          className="btn-secondary"
+                          className="cd-action-btn cd-action-btn--ghost"
                           onClick={() => {
                             setShowMaterialForm(null);
                             setSelectedFile(null);
@@ -492,26 +533,29 @@ export default function CourseDetailPage() {
                     </div>
                   )}
 
+                  {/* Materials list */}
                   {!materials[section.id] || materials[section.id].length === 0 ? (
-                    <p className="empty">Материалов пока нет</p>
+                    <p className="cd-empty cd-empty--inline">Материалов пока нет</p>
                   ) : (
-                    materials[section.id].map((material) => (
-                      <MaterialItem
-                        key={material.id}
-                        material={material}
-                        courseId={id!}
-                        isTeacher={isTeacher}
-                        getSubmissionStatus={getSubmissionStatus}
-                        onDelete={deleteMaterial}
-                      />
-                    ))
+                    <div className="cd-materials-list">
+                      {materials[section.id].map((material) => (
+                        <MaterialItem
+                          key={material.id}
+                          material={material}
+                          courseId={id!}
+                          isTeacher={!!isTeacher}
+                          getSubmissionStatus={getSubmissionStatus}
+                          onDelete={deleteMaterial}
+                        />
+                      ))}
+                    </div>
                   )}
                 </div>
               )}
             </div>
           ))}
         </div>
-      </div>
+      </section>
     </div>
   );
 }
@@ -530,37 +574,42 @@ function MaterialItem({ material, courseId, isTeacher, getSubmissionStatus, onDe
     if (material.materialType === 'ASSIGNMENT') getSubmissionStatus(material.id).then(setStatus);
   }, [material]);
 
-  const iconMap: Record<string, string> = {
-    ASSIGNMENT: '📝',
-    FILE: '📄',
-    LINK: '🔗',
-    TEST: '📊',
-    TEXT: '📝',
+  const typeMap: Record<string, { icon: string; label: string; color: string }> = {
+    ASSIGNMENT: { icon: '📝', label: 'ПЗ',   color: '#f59e0b' },
+    FILE:       { icon: '📄', label: 'Файл', color: '#3b82f6' },
+    LINK:       { icon: '🔗', label: 'Ссыл', color: '#6366f1' },
+    TEST:       { icon: '📊', label: 'Тест', color: '#8b5cf6' },
+    TEXT:       { icon: '📝', label: 'Текст',color: '#10b981' },
   };
-  const icon = iconMap[material.materialType] || '📄';
+  const meta = typeMap[material.materialType] ?? { icon: '📄', label: '', color: '#64748b' };
 
   return (
-    <div className="material-item">
-      <div className="material-left">
-        <span className="material-icon">{icon}</span>
-        <button className="material-link" onClick={() => navigate(`/courses/${courseId}/materials/${material.id}`)}>
-          {material.title}
-        </button>
-      </div>
-      <div className="material-right">
+    <div className="cd-material-item">
+      <span className="cd-material-icon" style={{ color: meta.color }}>{meta.icon}</span>
+      <button
+        className="cd-material-link"
+        onClick={() => navigate(`/courses/${courseId}/materials/${material.id}`)}
+      >
+        {material.title}
+      </button>
+      <div className="cd-material-right">
         {material.materialType === 'ASSIGNMENT' && (
-          <span className={`status ${status === 'Выполнено' ? 'done' : 'todo'}`}>{status}</span>
+          <span className={`cd-status ${status === 'Выполнено' ? 'cd-status--done' : 'cd-status--todo'}`}>
+            {status}
+          </span>
         )}
         {isTeacher && (
           <>
             <button
-              className="btn-small"
+              className="cd-action-btn cd-action-btn--amber cd-action-btn--sm"
               onClick={() => navigate(`/courses/${courseId}/materials/${material.id}/edit`)}
-              style={{ background: '#f59e0b' }}
             >
               ✏️
             </button>
-            <button className="btn-small btn-danger-small" onClick={() => onDelete(material.id)}>
+            <button
+              className="cd-action-btn cd-action-btn--red cd-action-btn--sm"
+              onClick={() => onDelete(material.id)}
+            >
               🗑️
             </button>
           </>

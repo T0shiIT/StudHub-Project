@@ -14,35 +14,33 @@ import CourseDetailPage from './pages/course-detail'
 import CourseEditPage from './pages/course-edit';
 import MaterialDetailPage from './pages/material-detail';
 import TestPassing from './pages/TestPassing';
+import TestResult from './pages/test-result';          // новый импорт
 import MaterialEditPage from './pages/material-edit';
-import Grades from './pages/grades'; // ← импорт оставлен, но маршрут убран
+import Grades from './pages/grades';
 
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Публичные маршруты авторизации */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/register-success" element={<RegisterSuccess />} />
           
-          {/* Защищённые маршруты приложения */}
           <Route path="/" element={<Layout />}>
             <Route index element={<Welcome />} />
             <Route path="schedule" element={<Schedule />} />
-            {/* <Route path="grades" element={<Grades />} /> – удалено */}
             <Route path="announcements" element={<Announcements />} />
             <Route path="profile" element={<Profile />} />
             <Route path="chat" element={<ChatPage />} />
             
-            {/* Курсы */}
             <Route path="courses/:id/edit" element={<CourseEditPage />} />
             <Route path="courses/:id/materials/:materialId" element={<MaterialDetailPage />} />
             <Route path="courses/:id" element={<CourseDetailPage />} />
             <Route path="courses/:courseId/grades" element={<Grades />} />
             <Route path="courses" element={<CoursesPage />} />
             <Route path="courses/:courseId/materials/:materialId/test" element={<TestPassing />} />
+            <Route path="courses/:courseId/materials/:materialId/result" element={<TestResult />} />
             <Route path="courses/:courseId/materials/:materialId/edit" element={<MaterialEditPage />} />
           </Route>
         </Routes>

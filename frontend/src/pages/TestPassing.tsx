@@ -13,13 +13,25 @@ export default function TestPassing() {
   const navigate = useNavigate();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(1800); // 30 минут
 
   useEffect(() => {
     loadQuestions();
-    checkAlreadyPassed();
+    const timer = setInterval(() => {
+      setTimeRemaining(prev => {
+        if (prev <= 0) {
+          clearInterval(timer);
+          handleFinishTest();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
   }, [materialId]);
 
   const loadQuestions = async () => {
@@ -36,30 +48,28 @@ export default function TestPassing() {
     }
   };
 
-  const checkAlreadyPassed = async () => {
-    try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}/test-result`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.completed) {
-          setResult(data.scorePercent);
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   const handleAnswer = (questionId: number, optionId: number) => {
     setAnswers(prev => ({ ...prev, [questionId]: optionId }));
   };
 
-  const submitTest = async () => {
-    if (Object.keys(answers).length !== questions.length) {
-      alert('Ответьте на все вопросы');
+  const handleNext = () => {
+    if (currentIndex < questions.length - 1) setCurrentIndex(currentIndex + 1);
+  };
+
+  const handlePrev = () => {
+    if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
+  };
+
+  const handleFinishTest = async () => {
+    const answeredCount = Object.keys(answers).length;
+    if (answeredCount < questions.length) {
+      setShowConfirm(true);
       return;
     }
+    await submitTest();
+  };
 
+  const submitTest = async () => {
     setSubmitting(true);
     try {
       const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}/submit-test`, {
@@ -69,7 +79,7 @@ export default function TestPassing() {
       });
       if (res.ok) {
         const data = await res.json();
-        setResult(data.scorePercent);
+        navigate(`/courses/${courseId}/materials/${materialId}/result`, { state: { score: data.scorePercent } });
       } else {
         const err = await res.text();
         alert('Ошибка: ' + err);
@@ -78,55 +88,143 @@ export default function TestPassing() {
       alert('Ошибка сети');
     } finally {
       setSubmitting(false);
+      setShowConfirm(false);
     }
   };
 
-  if (result !== null) {
-    return (
-      <div className="test-result-page">
-        <div className="test-result-card">
-          <h2>Результат теста</h2>
-          <div className="score">{result}%</div>
-          <button className="btn-primary" onClick={() => navigate(`/courses/${courseId}`)}>
-            Вернуться к курсу
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const formatTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
 
-  if (error) {
-    return <div className="error-message">{error}</div>;
-  }
+  if (error) return <div className="test-passing-page" style={{textAlign:'center', padding:40, color:'red'}}>{error}</div>;
+  if (questions.length === 0) return <div className="test-passing-page" style={{textAlign:'center', padding:40}}>Загрузка вопросов...</div>;
 
-  if (questions.length === 0) {
-    return <div className="loading">Загрузка вопросов...</div>;
-  }
+  const currentQuestion = questions[currentIndex];
+  const answeredCount = Object.keys(answers).length;
+  const isAnswered = answers[currentQuestion?.id] !== undefined;
 
   return (
     <div className="test-passing-page">
-      <h1>Прохождение теста</h1>
-      {questions.map((q, idx) => (
-        <div key={q.id} className="test-question-block">
-          <p className="question-text">{idx + 1}. {q.text}</p>
-          <div className="options">
-            {q.options.map(opt => (
-              <label key={opt.id} className="option">
-                <input
-                  type="radio"
-                  name={`q${q.id}`}
-                  value={opt.id}
-                  onChange={() => handleAnswer(q.id, opt.id)}
-                />
-                {opt.text}
-              </label>
-            ))}
+      <div className="header">
+        <button className="btn-back" onClick={() => navigate(`/courses/${courseId}`)}>
+          ← Назад к курсу
+        </button>
+        <div className="progress-info">
+          <span style={{fontSize:14, color:'#64748b'}}>
+            {currentIndex + 1} / {questions.length}
+          </span>
+          <span className={`timer ${timeRemaining < 300 ? 'warning' : ''}`}>
+            ⏱ {formatTime(timeRemaining)}
+          </span>
+        </div>
+      </div>
+
+      <div className="test-grid">
+        <div className="questions-area">
+          <div className="question-block">
+            <div className="q-header">
+              <span className="q-number">Вопрос {currentIndex + 1}</span>
+              {isAnswered && <span className="q-status">✅ Отвечено</span>}
+            </div>
+            <div className="q-text">{currentQuestion.text}</div>
+            <div className="options-grid">
+              {currentQuestion.options.map((opt, idx) => {
+                const selected = answers[currentQuestion.id] === opt.id;
+                return (
+                  <label key={opt.id} className={`option-item ${selected ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name={`q${currentQuestion.id}`}
+                      value={opt.id}
+                      checked={selected}
+                      onChange={() => handleAnswer(currentQuestion.id, opt.id)}
+                    />
+                    <span className="letter">{String.fromCharCode(65 + idx)}.</span>
+                    <span className="text">{opt.text}</span>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="question-nav-buttons">
+              <button className="btn btn-prev" onClick={handlePrev} disabled={currentIndex === 0}>
+                ← Назад
+              </button>
+              <div style={{display:'flex', gap:10}}>
+                {currentIndex < questions.length - 1 ? (
+                  <button className="btn btn-next" onClick={handleNext}>
+                    Следующий →
+                  </button>
+                ) : (
+                  <button
+                    className="btn btn-finish"
+                    onClick={handleFinishTest}
+                    disabled={submitting}
+                  >
+                    {submitting ? 'Отправка...' : '🏁 Завершить'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {currentIndex === questions.length - 1 && answeredCount < questions.length && (
+              <div className="warning-box">
+                <span style={{fontSize:20}}>⚠️</span>
+                <span>
+                  Вы ответили только на {answeredCount} из {questions.length} вопросов.
+                  {answeredCount < questions.length - 3 && ' Рекомендуем ответить на все.'}
+                </span>
+              </div>
+            )}
           </div>
         </div>
-      ))}
-      <button className="btn-primary" onClick={submitTest} disabled={submitting}>
-        {submitting ? 'Отправка...' : 'Завершить тест'}
-      </button>
+
+        <div className="sidebar">
+          <div className="question-nav">
+            <div className="title">
+              <span>Прогресс</span>
+              <span style={{fontWeight:'normal', color:'#64748b'}}>{answeredCount}/{questions.length}</span>
+            </div>
+            <div className="dots">
+              {questions.map((q, idx) => {
+                const isActive = idx === currentIndex;
+                const isAnswered = answers[q.id] !== undefined;
+                let cls = 'dot';
+                if (isActive) cls += ' active';
+                if (isAnswered) cls += ' answered';
+                return (
+                  <button key={q.id} className={cls} onClick={() => setCurrentIndex(idx)}>
+                    {isAnswered ? '✓' : idx + 1}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="legend">
+              <span>⬤ Отвечено</span>
+              <span>◯ Не отвечено</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {showConfirm && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <div className="modal-icon">⚠️</div>
+            <h3>Вы уверены?</h3>
+            <p>
+              Вы ответили только на {answeredCount} из {questions.length} вопросов.
+              Неотвеченные будут засчитаны как неправильные.
+            </p>
+            <div className="modal-actions">
+              <button className="btn btn-cancel" onClick={() => setShowConfirm(false)}>Продолжить</button>
+              <button className="btn btn-confirm" onClick={submitTest}>Отправить</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
