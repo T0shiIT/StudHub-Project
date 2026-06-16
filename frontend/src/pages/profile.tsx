@@ -3,9 +3,13 @@ import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { getAllGroups, updateUserGroup, getUserGroup } from '../api/groups';
 
-// Автоматически собираем все PNG из public/avatars/
-const avatarModules = import.meta.glob('/public/avatars/*.png', { eager: true, as: 'url' });
-const AVATAR_LIST = Object.keys(avatarModules).map(path => path.split('/').pop()!);
+// Импортируем все аватары из папки assets/avatars/
+const avatarModules = import.meta.glob('../assets/avatars/*.png', { eager: true, query: '?url', import: 'default' });
+// Получаем массив объектов { name, url }
+const AVATAR_LIST = Object.entries(avatarModules).map(([path, url]) => ({
+  name: path.split('/').pop()!,
+  url: url as string,
+}));
 
 // Ключи для localStorage
 const STORAGE_KEYS = {
@@ -37,7 +41,6 @@ export default function Profile() {
     if (savedAbout) {
       setAboutText(savedAbout);
     }
-    // Группу будем загружать после получения с сервера
   }, []);
 
   // Если пользователь пришёл с сервера и у него есть avatar, используем его
@@ -59,14 +62,12 @@ export default function Profile() {
             setSelectedGroup(currentGroup);
             localStorage.setItem(STORAGE_KEYS.group, currentGroup);
           } else {
-            // Если с сервера не пришла группа, пытаемся восстановить из localStorage
             const savedGroup = localStorage.getItem(STORAGE_KEYS.group) || '';
             setSelectedGroup(savedGroup);
           }
         })
         .catch(err => {
           console.error('Ошибка загрузки групп:', err);
-          // В случае ошибки пытаемся взять группу из localStorage
           const savedGroup = localStorage.getItem(STORAGE_KEYS.group) || '';
           setSelectedGroup(savedGroup);
         });
@@ -80,7 +81,6 @@ export default function Profile() {
     setSaveMessage(null);
     try {
       await updateUserGroup(newGroup);
-      // Сохраняем группу в localStorage
       localStorage.setItem(STORAGE_KEYS.group, newGroup);
       setSaveMessage({ text: 'Группа успешно обновлена', type: 'success' });
       await refreshUser();
@@ -104,20 +104,8 @@ export default function Profile() {
 
   const handleSaveProfile = async () => {
     try {
-      // Сохраняем в localStorage
       localStorage.setItem(STORAGE_KEYS.avatar, selectedAvatar);
       localStorage.setItem(STORAGE_KEYS.about, aboutText);
-      // Группа уже сохраняется отдельно при её изменении
-
-      // Пример отправки на сервер (раскомментируйте, когда будет готово)
-      // const response = await fetchWithCsrf('/api/user/profile', {
-      //   method: 'PUT',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ avatar: selectedAvatar, about: aboutText }),
-      // });
-      // if (!response.ok) throw new Error('Ошибка сохранения');
-      // await refreshUser();
-
       setSaveMessage({ text: 'Изменения сохранены локально', type: 'success' });
       setTimeout(() => setSaveMessage(null), 3000);
     } catch (error: any) {
@@ -146,7 +134,8 @@ export default function Profile() {
   const email = (user as any)?.default_email || user?.email || user?.login;
   const initials = fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
-  const avatarUrl = selectedAvatar ? `/avatars/${selectedAvatar}` : null;
+  // Находим URL выбранного аватара
+  const selectedAvatarUrl = AVATAR_LIST.find(a => a.name === selectedAvatar)?.url || null;
 
   return (
     <div className="dashboard">
@@ -163,9 +152,9 @@ export default function Profile() {
               onClick={() => setIsAvatarModalOpen(true)}
               style={{ cursor: 'pointer', display: 'inline-block' }}
             >
-              {avatarUrl ? (
+              {selectedAvatarUrl ? (
                 <img 
-                  src={avatarUrl} 
+                  src={selectedAvatarUrl} 
                   alt="Аватар" 
                   style={{ 
                     borderRadius: '50%', 
@@ -368,14 +357,14 @@ export default function Profile() {
               gridTemplateColumns: 'repeat(auto-fill, minmax(70px, 1fr))', 
               gap: '12px',
             }}>
-              {AVATAR_LIST.map((fileName) => {
-                const isSelected = selectedAvatar === fileName;
+              {AVATAR_LIST.map(({ name, url }) => {
+                const isSelected = selectedAvatar === name;
                 return (
                   <div 
-                    key={fileName}
+                    key={name}
                     onClick={() => {
-                      setSelectedAvatar(fileName);
-                      localStorage.setItem(STORAGE_KEYS.avatar, fileName);
+                      setSelectedAvatar(name);
+                      localStorage.setItem(STORAGE_KEYS.avatar, name);
                       setIsAvatarModalOpen(false);
                     }}
                     style={{ 
@@ -391,8 +380,8 @@ export default function Profile() {
                     }}
                   >
                     <img 
-                      src={`/avatars/${fileName}`} 
-                      alt={fileName}
+                      src={url} 
+                      alt={name}
                       style={{ 
                         width: '100%', 
                         height: '100%', 
