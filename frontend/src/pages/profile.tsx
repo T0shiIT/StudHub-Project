@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { getAllGroups, updateUserGroup, getUserGroup } from '../api/groups';
 
 // Импортируем все аватары из папки assets/avatars/
@@ -31,6 +31,17 @@ export default function Profile() {
   const [groupLoading, setGroupLoading] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
+  // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'ADMIN': return 'Администратор';
+      case 'TEACHER': return 'Преподаватель';
+      case 'STUDENT': return 'Студент';
+      default: return role;
+    }
+  };
+
+  // ===== ХУКИ (useEffect) — ВСЕ ДО ПРОВЕРКИ =====
   // Загружаем сохранённые данные из localStorage при монтировании
   useEffect(() => {
     const savedAvatar = localStorage.getItem(STORAGE_KEYS.avatar);
@@ -113,22 +124,15 @@ export default function Profile() {
     }
   };
 
+  // ===== ЗАЩИТА МАРШРУТА (ПОСЛЕ ВСЕХ ХУКОВ) =====
   if (loading) {
     return <div className="dashboard-loading">Загрузка профиля...</div>;
   }
-
   if (!isAuthenticated) {
-    return (
-      <div style={{ textAlign: 'center', padding: '40px' }}>
-        <h2>Профиль</h2>
-        <p style={{ color: '#64748b', marginTop: '16px' }}>
-          Для просмотра профиля необходимо{' '}
-          <Link to="/login" style={{ color: '#3b82f6' }}>авторизоваться</Link>
-        </p>
-      </div>
-    );
+    return <Navigate to="/login" replace />;
   }
 
+  // ===== ВЫЧИСЛЯЕМЫЕ ДАННЫЕ =====
   const isYandex = (user as any)?.default_avatar_id;
   const fullName = (user as any)?.real_name || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Имя не указано';
   const email = (user as any)?.default_email || user?.email || user?.login;
@@ -137,6 +141,7 @@ export default function Profile() {
   // Находим URL выбранного аватара
   const selectedAvatarUrl = AVATAR_LIST.find(a => a.name === selectedAvatar)?.url || null;
 
+  // ===== РЕНДЕР =====
   return (
     <div className="dashboard">
       <div className="dashboard-hero">
@@ -216,7 +221,7 @@ export default function Profile() {
                 marginTop: '8px',
                 color: '#475569'
               }}>
-                {user.role}
+                {getRoleLabel(user.role)}
               </span>
             )}
           </div>

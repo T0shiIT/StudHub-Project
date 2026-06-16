@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { Navigate } from 'react-router-dom';
 import { fetchWithCsrf, ensureCsrfToken } from '../utils/csrf';
 import type { ChangeEvent } from 'react';
 
@@ -20,8 +21,16 @@ interface Post {
 }
 
 export default function Announcements() {
-  const { user } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
   
+  // ===== ЗАЩИТА МАРШРУТА =====
+  if (loading) {
+    return <div className="dashboard-loading">Загрузка...</div>;
+  }
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
   // Изначально пустой массив, без мок-данных
   const [posts, setPosts] = useState<Post[]>([]);
   const [newText, setNewText] = useState('');

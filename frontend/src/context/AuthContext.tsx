@@ -16,6 +16,7 @@ interface AuthContextType {
   loading: boolean;
   isAuthenticated: boolean;
   refreshUser: () => Promise<void>;
+  logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,6 +46,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const logout = () => {
+    setUser(null);
+    localStorage.removeItem('isAuthenticated');
+  };
+
   useEffect(() => {
     refreshUser();
   }, []);
@@ -52,7 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAuthenticated = !!user;
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAuthenticated, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, isAuthenticated, refreshUser, logout }}>
       {children}
     </AuthContext.Provider>
   );

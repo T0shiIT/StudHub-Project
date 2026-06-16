@@ -12,10 +12,10 @@ export default function Login() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Если пользователь уже авторизован — перенаправляем на расписание
+  // Если пользователь уже авторизован — перенаправляем на главную
   useEffect(() => {
     if (!loading && isAuthenticated) {
-      navigate('/schedule');
+      navigate('/');
     }
   }, [isAuthenticated, loading, navigate]);
 
@@ -49,7 +49,7 @@ export default function Login() {
       await refreshUser();
       localStorage.setItem('isAuthenticated', 'true');
       localStorage.setItem('userEmail', formData.email);
-      navigate('/schedule');
+      navigate('/'); // ← редирект на главную
     } catch {
       setError('Не удалось подключиться к серверу. Попробуйте позже.');
     } finally {
@@ -64,7 +64,7 @@ export default function Login() {
   const handleVkLogin = () => {
     // TODO: реализовать вход через ВК через бэкенд
     localStorage.setItem('isAuthenticated', 'true');
-    navigate('/schedule');
+    navigate('/'); // ← редирект на главную
   };
 
   if (loading) {

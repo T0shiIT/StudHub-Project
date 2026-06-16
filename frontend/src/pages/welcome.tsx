@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { fetchWithCsrf } from '../utils/csrf';
+import logo from '../assets/logo.png'; // ← импорт логотипа
 import {
   buildMatrix,
   getWeekSegments,
@@ -31,7 +32,7 @@ interface Announcement {
 }
 
 export default function Welcome() {
-  const { user } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const [todayLessons, setTodayLessons] = useState<DaySchedule['lessons']>([]);
   const [nextLessonTime, setNextLessonTime] = useState<string>('');
   const [courses, setCourses] = useState<Course[]>([]);
@@ -56,6 +57,11 @@ export default function Welcome() {
   };
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
+
     const fetchDashboardData = async () => {
       try {
         // 1. Расписание
@@ -177,7 +183,6 @@ export default function Welcome() {
         }
 
         // 4. Уведомления – пока не реализовано, ставим null (нет данных)
-        // Если будет API – замените на реальный запрос
         setNotificationsCount(null);
 
       } catch (error) {
@@ -188,8 +193,45 @@ export default function Welcome() {
     };
 
     fetchDashboardData();
-  }, [user]);
+  }, [user, isAuthenticated]);
 
+  // Если ещё идет проверка авторизации
+  if (authLoading) {
+    return <div className="dashboard-loading">Загрузка...</div>;
+  }
+
+  // Если пользователь не авторизован — показываем приветственную страницу
+  if (!isAuthenticated) {
+    return (
+      <div className="welcome-container">
+        <div className="welcome-card">
+          <img src={logo} alt="StudHub" className="welcome-logo" />
+          <h1 className="welcome-title">Добро пожаловать в StudHub!</h1>
+          <p className="welcome-desc">
+            Платформа для управления учебным процессом. Войдите или зарегистрируйтесь,
+            чтобы получить доступ к расписанию, курсам и материалам.
+          </p>
+          <div className="welcome-actions">
+            <Link to="/login" className="btn btn-primary">Войти</Link>
+            <Link to="/register" className="btn btn-outline">Зарегистрироваться</Link>
+          </div>
+          <div className="welcome-features">
+            <div className="feature">
+              <span>📅</span> Расписание
+            </div>
+            <div className="feature">
+              <span>📚</span> Курсы
+            </div>
+            <div className="feature">
+              <span>💬</span> Чат
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Авторизованный пользователь — дашборд
   // Данные для статистики
   const totalPairs = todayLessons.length;
   const averageGrade = null; // нет API

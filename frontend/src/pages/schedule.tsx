@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { Navigate } from 'react-router-dom';
 import { fetchWithCsrf } from '../utils/csrf';
 import {
   buildMatrix,
@@ -105,7 +106,7 @@ function createSavedScheduleFromUpload(result: Record<string, unknown>, schedule
 }
 
 export default function Schedule() {
-  const { user } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [savedSchedulesLoading, setSavedSchedulesLoading] = useState(true);
@@ -124,6 +125,7 @@ export default function Schedule() {
   const [selectedWeek, setSelectedWeek] = useState<WeekType>('even');
   const [selectedGroupIndex, setSelectedGroupIndex] = useState(0);
 
+  // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
   const resetScheduleControls = () => {
     setCurrentSheetIndex(0);
     setSelectedWeek('even');
@@ -206,6 +208,7 @@ export default function Schedule() {
     }
   };
 
+  // ===== ХУКИ (useEffect) — ВСЕ ДО ПРОВЕРКИ =====
   useEffect(() => {
     void loadSavedSchedules();
   }, []);
@@ -227,7 +230,6 @@ export default function Schedule() {
     scheduleSearchInputRef.current?.focus();
   }, [savedSchedulePickerOpen]);
 
-  // Автоматический выбор группы пользователя с нормализацией (используем user.group)
   useEffect(() => {
     if (!scheduleData || !user?.group) return;
 
@@ -251,6 +253,15 @@ export default function Schedule() {
     }
   }, [scheduleData, currentSheetIndex, selectedWeek, user?.group]);
 
+  // ===== ЗАЩИТА МАРШРУТА (ПОСЛЕ ВСЕХ ХУКОВ) =====
+  if (authLoading) {
+    return <div className="dashboard-loading">Загрузка...</div>;
+  }
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // ===== ОБРАБОТЧИК ЗАГРУЗКИ ФАЙЛА =====
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -298,6 +309,7 @@ export default function Schedule() {
     }
   };
 
+  // ===== ВЫЧИСЛЯЕМЫЕ ДАННЫЕ =====
   const currentSheet = scheduleData?.sheets[currentSheetIndex];
   const matrix = currentSheet ? buildMatrix(currentSheet) : [];
   const weekSegments = getWeekSegments(matrix);
@@ -334,6 +346,7 @@ export default function Schedule() {
     void openSavedSchedule(scheduleId);
   };
 
+  // ===== РЕНДЕР =====
   return (
     <div className="schedule-page">
       <section className="schedule-hero">
