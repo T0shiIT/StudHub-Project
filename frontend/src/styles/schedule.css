@@ -23,7 +23,8 @@
   padding: 28px;
 }
 
-.schedule-hero::after {
+/* УДАЛЯЕМ фоновое свечение */
+/* .schedule-hero::after {
   content: '';
   position: absolute;
   inset: auto -80px -120px auto;
@@ -32,7 +33,7 @@
   border-radius: 50%;
   background: radial-gradient(circle, rgba(59, 130, 246, 0.18), transparent 68%);
   pointer-events: none;
-}
+} */
 
 .schedule-eyebrow,
 .schedule-file-info span {
@@ -191,6 +192,7 @@
   text-align: center;
 }
 
+/* КНОПКА БЕЗ СВЕЧЕНИЯ */
 .schedule-upload-btn {
   position: relative;
   z-index: 1;
@@ -203,21 +205,34 @@
   font-size: 15px;
   font-weight: 800;
   cursor: pointer;
-  transition: background 0.18s ease, transform 0.18s ease;
+  outline: none;
+  box-shadow: none;
+  transition: background 0.18s ease;
 }
 
 .schedule-upload-btn:hover:not(:disabled) {
   background: #1d4ed8;
-  transform: translateY(-2px);
+  box-shadow: none;
+  transform: none;
+}
+
+.schedule-upload-btn:focus,
+.schedule-upload-btn:focus-visible {
+  outline: none;
+  box-shadow: none;
+  transform: none;
 }
 
 .schedule-upload-btn:active:not(:disabled) {
-  transform: translateY(0);
+  box-shadow: none;
+  transform: none;
 }
 
 .schedule-upload-btn:disabled {
   cursor: wait;
   opacity: 0.72;
+  box-shadow: none;
+  transform: none;
 }
 
 .schedule-file-input {
