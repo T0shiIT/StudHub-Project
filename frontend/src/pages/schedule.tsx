@@ -1,21 +1,30 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { fetchWithCsrf } from '../utils/csrf';
+import {
+  buildMatrix,
+  getWeekSegments,
+  getAvailableWeeks,
+  getActiveWeek,
+  getSegmentByWeek,
+  getGroupOptions,
+  buildDaySchedules,
+  formatWeekType,
+  EMPTY_CELL,
+  toScheduleData,
+  isScheduleData,
+  normalizeGroupName,
+  type ScheduleData,
+  type WeekType,
+  type GroupOption,
+  type DaySchedule,
+  type LessonCard,
+} from '../utils/scheduleParser';
+import { useAuth } from '../context/AuthContext';
 
 const API_BASE_URL = 'http://localhost:8080';
 const SCHEDULE_UPLOAD_URL = `${API_BASE_URL}/api/schedule/upload`;
 const SCHEDULE_UPLOADS_URL = `${API_BASE_URL}/api/schedule/uploads`;
 const SUPPORTED_EXCEL_EXTENSIONS = '.xlsx,.xls,.xlsm,.xlsb';
-const EMPTY_CELL = '';
-const TABLE_HEADER_ROWS_COUNT = 4;
-const DAY_NAMES = ['понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
-const WEEK_TYPES: WeekType[] = ['even', 'odd'];
-const PAIR_NUMBER_PATTERN = /^\d+/;
-const DAY_NAME_PATTERN = /понедельник|вторник|среда|четверг|пятница|суббота|воскресенье/i;
-const ODD_WEEK_PATTERN = /неч[её]тн/i;
-const EVEN_WEEK_PATTERN = /(?<!не)ч[её]тн/i;
-const DAY_HEADER_TEXT = 'дни недели';
-const PAIR_HEADER_TEXT = 'пара';
-const TYPE_HEADER_TEXT = 'вид занятий';
 const UNKNOWN_ERROR_MESSAGE = 'Неизвестная ошибка';
 const INVALID_SCHEDULE_RESPONSE_MESSAGE = 'Ответ сервера не содержит корректное расписание';
 const EMPTY_SCHEDULE_SELECT_VALUE = '';
@@ -32,296 +41,12 @@ const DATE_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
   minute: '2-digit',
 };
 
-type WeekType = 'even' | 'odd';
-type ScheduleCellValue = string | number | boolean | null | undefined;
-
-interface Cell {
-  columnIndex: number;
-  columnName: string;
-  value: ScheduleCellValue;
-}
-
-interface Row {
-  cells: Cell[];
-  rowIndex: number;
-}
-
-interface Sheet {
-  sheetName: string;
-  rows: Row[];
-  rowsCount: number;
-  columnsCount: number;
-}
-
-interface ScheduleData {
-  fileName: string;
-  sheets: Sheet[];
-  sheetsCount: number;
-}
-
 interface SavedSchedule {
   id: number;
   fileName: string;
   fileType: string;
   uploadedBy: string;
   createdAt: string | null;
-}
-
-interface WeekSegment {
-  type: WeekType;
-  start: number;
-  end: number;
-}
-
-interface GroupOption {
-  label: string;
-  columnIndex: number;
-  typeColumnIndex: number;
-}
-
-interface LessonCard {
-  pair: string;
-  type: string;
-  title: string;
-  teacher: string;
-  room: string;
-  details: string[];
-}
-
-interface DaySchedule {
-  key: string;
-  title: string;
-  lessons: LessonCard[];
-}
-
-function normalizeCellValue(value: ScheduleCellValue): string {
-  if (value === null || value === undefined) return EMPTY_CELL;
-  return String(value).trim();
-}
-
-function isFilledCell(value: ScheduleCellValue): boolean {
-  return normalizeCellValue(value).length > 0;
-}
-
-function capitalize(value: string): string {
-  return value.length === 0 ? value : value[0].toUpperCase() + value.slice(1);
-}
-
-function getMaxColumns(sheet: Sheet): number {
-  let max = 0;
-  const rows = Array.isArray(sheet.rows) ? sheet.rows : [];
-  rows.forEach(row => {
-    const cells = Array.isArray(row.cells) ? row.cells : [];
-    cells.forEach(cell => {
-      if (cell.columnIndex > max) max = cell.columnIndex;
-    });
-  });
-  return max + 1;
-}
-
-function buildMatrix(sheet: Sheet): string[][] {
-  const maxCols = getMaxColumns(sheet);
-  const rows = Array.isArray(sheet.rows) ? sheet.rows : [];
-  const matrix = rows.map(row => {
-    const rowCells: string[] = new Array(maxCols).fill(EMPTY_CELL);
-    const cells = Array.isArray(row.cells) ? row.cells : [];
-    cells.forEach(cell => {
-      rowCells[cell.columnIndex] = normalizeCellValue(cell.value);
-    });
-    return rowCells;
-  });
-
-  const visibleColumnIndexes = Array.from({ length: maxCols }, (_, index) => index)
-    .filter(colIndex => matrix.some(row => isFilledCell(row[colIndex])));
-
-  return matrix
-    .map(row => visibleColumnIndexes.map(colIndex => row[colIndex]))
-    .filter(row => row.some(isFilledCell));
-}
-
-function resolveWeekType(value: string): WeekType | null {
-  if (ODD_WEEK_PATTERN.test(value)) return 'odd';
-  if (EVEN_WEEK_PATTERN.test(value)) return 'even';
-  return null;
-}
-
-function formatWeekType(week: WeekType): string {
-  return week === 'even' ? 'Чётная неделя' : 'Нечётная неделя';
-}
-
-function getWeekSegments(matrix: string[][]): WeekSegment[] {
-  const headerRow = matrix[0] ?? [];
-  const segments: WeekSegment[] = [];
-  let currentType: WeekType | null = null;
-  let currentStart = 0;
-
-  headerRow.forEach((cell, colIdx) => {
-    const weekType = resolveWeekType(cell);
-    if (!weekType) return;
-
-    if (!currentType) {
-      currentType = weekType;
-      currentStart = colIdx;
-      return;
-    }
-
-    if (weekType !== currentType) {
-      segments.push({ type: currentType, start: currentStart, end: colIdx });
-      currentType = weekType;
-      currentStart = colIdx;
-    }
-  });
-
-  if (currentType) {
-    segments.push({ type: currentType, start: currentStart, end: headerRow.length });
-  }
-
-  if (segments.length === 0 && headerRow.length > 0) {
-    segments.push({ type: 'even', start: 0, end: headerRow.length });
-  }
-
-  return segments.filter(segment => segment.end > segment.start);
-}
-
-function getAvailableWeeks(segments: WeekSegment[]): WeekType[] {
-  return WEEK_TYPES.filter(week => segments.some(segment => segment.type === week));
-}
-
-function getActiveWeek(selectedWeek: WeekType, availableWeeks: WeekType[]): WeekType {
-  return availableWeeks.includes(selectedWeek) ? selectedWeek : availableWeeks[0] ?? 'even';
-}
-
-function getSegmentByWeek(segments: WeekSegment[], week: WeekType): WeekSegment | null {
-  return segments.find(segment => segment.type === week) ?? segments[0] ?? null;
-}
-
-function headerIncludes(matrix: string[][], colIdx: number, text: string): boolean {
-  const lowerText = text.toLowerCase();
-  return [2, 3].some(rowIdx => normalizeCellValue(matrix[rowIdx]?.[colIdx]).toLowerCase().includes(lowerText));
-}
-
-function findColumnByHeader(matrix: string[][], segment: WeekSegment, text: string, fallbackOffset: number): number {
-  for (let colIdx = segment.start; colIdx < segment.end; colIdx += 1) {
-    if (headerIncludes(matrix, colIdx, text)) return colIdx;
-  }
-  return Math.min(segment.start + fallbackOffset, segment.end - 1);
-}
-
-function findTypeColumn(matrix: string[][], segment: WeekSegment, groupColumnIndex: number): number {
-  for (let colIdx = groupColumnIndex - 1; colIdx >= segment.start; colIdx -= 1) {
-    if (headerIncludes(matrix, colIdx, TYPE_HEADER_TEXT)) return colIdx;
-  }
-  return findColumnByHeader(matrix, segment, TYPE_HEADER_TEXT, 2);
-}
-
-function getGroupOptions(matrix: string[][], segment: WeekSegment): GroupOption[] {
-  const groupHeaderRow = matrix[3] ?? [];
-  const fallbackHeaderRow = matrix[2] ?? [];
-  const options: GroupOption[] = [];
-
-  for (let colIdx = segment.start; colIdx < segment.end; colIdx += 1) {
-    const label = normalizeCellValue(groupHeaderRow[colIdx] || fallbackHeaderRow[colIdx]);
-    const lowerLabel = label.toLowerCase();
-
-    if (!label) continue;
-    if (resolveWeekType(label)) continue;
-    if (lowerLabel.includes(DAY_HEADER_TEXT)) continue;
-    if (lowerLabel === PAIR_HEADER_TEXT) continue;
-    if (lowerLabel.includes(TYPE_HEADER_TEXT)) continue;
-
-    options.push({
-      label,
-      columnIndex: colIdx,
-      typeColumnIndex: findTypeColumn(matrix, segment, colIdx),
-    });
-  }
-  return options;
-}
-
-function getDayKey(value: string): string | null {
-  const lowerValue = value.toLowerCase();
-  if (!DAY_NAME_PATTERN.test(lowerValue)) return null;
-  return DAY_NAMES.find(day => lowerValue.includes(day)) ?? null;
-}
-
-function createEmptyDaySchedules(): DaySchedule[] {
-  return DAY_NAMES.map(day => ({
-    key: day,
-    title: capitalize(day),
-    lessons: [],
-  }));
-}
-
-function appendLessonDetail(lesson: LessonCard, value: string): void {
-  const knownValues = [lesson.title, lesson.teacher, lesson.room, ...lesson.details];
-  if (!value || knownValues.includes(value)) return;
-
-  if (!lesson.title) {
-    lesson.title = value;
-    return;
-  }
-  if (!lesson.teacher) {
-    lesson.teacher = value;
-    return;
-  }
-  if (!lesson.room) {
-    lesson.room = value;
-    return;
-  }
-  lesson.details.push(value);
-}
-
-function buildDaySchedules(matrix: string[][], segment: WeekSegment, group: GroupOption): DaySchedule[] {
-  const dayColumnIndex = findColumnByHeader(matrix, segment, DAY_HEADER_TEXT, 0);
-  const pairColumnIndex = findColumnByHeader(matrix, segment, PAIR_HEADER_TEXT, 1);
-  const daySchedules = createEmptyDaySchedules();
-  const dayMap = new Map(daySchedules.map(day => [day.key, day]));
-  const lessonMap = new Map<string, LessonCard>();
-
-  for (let rowIdx = TABLE_HEADER_ROWS_COUNT; rowIdx < matrix.length; rowIdx += 1) {
-    const row = matrix[rowIdx] ?? [];
-    const dayKey = getDayKey(normalizeCellValue(row[dayColumnIndex]));
-    const pair = normalizeCellValue(row[pairColumnIndex]);
-    const lessonValue = normalizeCellValue(row[group.columnIndex]);
-
-    if (!dayKey || !PAIR_NUMBER_PATTERN.test(pair) || !lessonValue) continue;
-
-    const lessonKey = `${dayKey}:${pair}`;
-    let lesson = lessonMap.get(lessonKey);
-
-    if (!lesson) {
-      lesson = {
-        pair,
-        type: normalizeCellValue(row[group.typeColumnIndex]),
-        title: EMPTY_CELL,
-        teacher: EMPTY_CELL,
-        room: EMPTY_CELL,
-        details: [],
-      };
-      lessonMap.set(lessonKey, lesson);
-      dayMap.get(dayKey)?.lessons.push(lesson);
-    }
-
-    if (!lesson.type) {
-      lesson.type = normalizeCellValue(row[group.typeColumnIndex]);
-    }
-    appendLessonDetail(lesson, lessonValue);
-  }
-
-  return daySchedules;
-}
-
-function isScheduleData(value: unknown): value is ScheduleData {
-  if (!value || typeof value !== 'object') return false;
-  const schedule = value as ScheduleData;
-  return typeof schedule.fileName === 'string' && Array.isArray(schedule.sheets);
-}
-
-function toScheduleData(value: unknown): ScheduleData {
-  if (!isScheduleData(value)) {
-    throw new Error(INVALID_SCHEDULE_RESPONSE_MESSAGE);
-  }
-  return value;
 }
 
 function formatScheduleDate(value: string | null | undefined): string {
@@ -380,6 +105,7 @@ function createSavedScheduleFromUpload(result: Record<string, unknown>, schedule
 }
 
 export default function Schedule() {
+  const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [savedSchedulesLoading, setSavedSchedulesLoading] = useState(true);
@@ -444,7 +170,6 @@ export default function Schedule() {
       const schedules = Array.isArray(result.schedules) ? result.schedules : [];
       setSavedSchedules(schedules);
 
-      // Если текущий выбранный schedule не существует в новом списке – сбросить
       const stillExists = schedules.some(s => String(s.id) === selectedScheduleId);
       if (selectedScheduleId !== EMPTY_SCHEDULE_SELECT_VALUE && !stillExists) {
         setScheduleData(null);
@@ -463,7 +188,7 @@ export default function Schedule() {
   };
 
   const deleteSchedule = async (id: number, event: React.MouseEvent) => {
-    event.stopPropagation(); // чтобы не открывалось расписание при клике на удаление
+    event.stopPropagation();
     if (!confirm('Вы уверены, что хотите удалить это расписание?')) return;
 
     setDeletingScheduleId(id);
@@ -473,7 +198,6 @@ export default function Schedule() {
       if (!response.ok) {
         throw new Error(await getResponseErrorMessage(response, `Ошибка удаления: ${response.status}`));
       }
-      // Обновляем список после удаления
       await loadSavedSchedules();
     } catch (err) {
       setError(toErrorMessage(err));
@@ -502,6 +226,30 @@ export default function Schedule() {
     if (!savedSchedulePickerOpen) return;
     scheduleSearchInputRef.current?.focus();
   }, [savedSchedulePickerOpen]);
+
+  // Автоматический выбор группы пользователя с нормализацией (используем user.group)
+  useEffect(() => {
+    if (!scheduleData || !user?.group) return;
+
+    const sheet = scheduleData.sheets[currentSheetIndex];
+    if (!sheet) return;
+    const matrix = buildMatrix(sheet);
+    const weekSegments = getWeekSegments(matrix);
+    const availableWeeks = getAvailableWeeks(weekSegments);
+    const activeWeek = getActiveWeek(selectedWeek, availableWeeks);
+    const activeSegment = getSegmentByWeek(weekSegments, activeWeek);
+    if (!activeSegment) return;
+    const options = getGroupOptions(matrix, activeSegment);
+    if (options.length === 0) return;
+
+    const userGroupNormalized = normalizeGroupName(user.group);
+    const foundIndex = options.findIndex(opt => 
+      normalizeGroupName(opt.label) === userGroupNormalized
+    );
+    if (foundIndex !== -1 && foundIndex !== selectedGroupIndex) {
+      setSelectedGroupIndex(foundIndex);
+    }
+  }, [scheduleData, currentSheetIndex, selectedWeek, user?.group]);
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -535,9 +283,9 @@ export default function Schedule() {
       const uploadedSchedule = createSavedScheduleFromUpload(result, schedule);
       applyScheduleData(schedule, uploadedSchedule ? String(uploadedSchedule.id) : EMPTY_SCHEDULE_SELECT_VALUE);
       if (uploadedSchedule) {
-        setSavedSchedules(previousSchedules => [
+        setSavedSchedules(prev => [
           uploadedSchedule,
-          ...previousSchedules.filter(savedSchedule => savedSchedule.id !== uploadedSchedule.id),
+          ...prev.filter(s => s.id !== uploadedSchedule.id),
         ]);
       } else {
         void loadSavedSchedules();
@@ -561,13 +309,13 @@ export default function Schedule() {
   const activeGroup = groupOptions[activeGroupIndex];
   const daySchedules = activeSegment && activeGroup
     ? buildDaySchedules(matrix, activeSegment, activeGroup)
-    : createEmptyDaySchedules();
+    : [];
   const isScheduleBusy = loading || savedSchedulesLoading || scheduleOpening;
   const normalizedScheduleSearchQuery = normalizeSearchValue(scheduleSearchQuery);
-  const filteredSavedSchedules = savedSchedules.filter(schedule =>
-    matchesSavedScheduleSearch(schedule, normalizedScheduleSearchQuery)
+  const filteredSavedSchedules = savedSchedules.filter(s =>
+    matchesSavedScheduleSearch(s, normalizedScheduleSearchQuery)
   );
-  const selectedSavedSchedule = savedSchedules.find(schedule => String(schedule.id) === selectedScheduleId);
+  const selectedSavedSchedule = savedSchedules.find(s => String(s.id) === selectedScheduleId);
   const selectedScheduleLabel = selectedSavedSchedule
     ? formatSavedScheduleOption(selectedSavedSchedule)
     : SCHEDULE_PICKER_DEFAULT_TEXT;
@@ -619,7 +367,7 @@ export default function Schedule() {
                     type="search"
                     value={scheduleSearchQuery}
                     placeholder={SCHEDULE_SEARCH_PLACEHOLDER}
-                    onChange={(event) => setScheduleSearchQuery(event.target.value)}
+                    onChange={(e) => setScheduleSearchQuery(e.target.value)}
                   />
                   <div className="schedule-picker-options" role="listbox" aria-label="Выбор загруженного расписания">
                     {filteredSavedSchedules.length > 0 ? (
@@ -760,17 +508,14 @@ export default function Schedule() {
                   {day.lessons.length > 0 ? (
                     <div className="schedule-lessons-list">
                       {day.lessons.map(lesson => (
-                        <div key={`${day.key}-${lesson.pair}-${lesson.title}`} className="schedule-lesson-card">
-                          <div className="schedule-lesson-card__meta">
-                            <span>{lesson.pair} пара</span>
-                            {lesson.type && <em>{lesson.type}</em>}
+                        <div key={`${day.key}-${lesson.pair}-${lesson.title}`} className="schedule-lesson-item">
+                          <span className="schedule-lesson-time">{lesson.pair}</span>
+                          <div className="schedule-lesson-details">
+                            <span className="schedule-lesson-title">{lesson.title}</span>
+                            {lesson.type && <span className="schedule-lesson-type">{lesson.type}</span>}
+                            {lesson.teacher && <span className="schedule-lesson-teacher">{lesson.teacher}</span>}
+                            {lesson.room && <span className="schedule-lesson-room">{lesson.room}</span>}
                           </div>
-                          <h4>{lesson.title}</h4>
-                          {lesson.teacher && <p className="schedule-lesson-card__teacher">{lesson.teacher}</p>}
-                          {lesson.room && <p className="schedule-lesson-card__room">📍 {lesson.room}</p>}
-                          {lesson.details.map(detail => (
-                            <p key={detail} className="schedule-lesson-card__detail">{detail}</p>
-                          ))}
                         </div>
                       ))}
                     </div>
