@@ -1,0 +1,94 @@
+/* Контейнер таблицы со скроллом */
+.grades-table-container {
+  max-height: 65vh;
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  position: relative;
+}
+
+.grades-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 100%;
+  width: max-content;
+}
+
+/* Липкий заголовок */
+.grades-table__header {
+  position: sticky;
+  top: 0;
+  background-color: #f9fafb;
+  z-index: 10;
+  border-bottom: 2px solid #e5e7eb;
+  padding: 12px 16px;
+  text-align: center;
+  min-width: 120px;
+}
+
+/* Липкая первая колонка */
+.grades-table__student-column {
+  position: sticky;
+  left: 0;
+  background-color: #f9fafb;
+  z-index: 20;
+  border-right: 2px solid #e5e7eb;
+  min-width: 200px;
+  text-align: left;
+}
+
+.grades-table__header.grades-table__student-column {
+  z-index: 30;
+}
+
+.grades-table__cell {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  border-right: 1px solid #f3f4f6;
+  text-align: center;
+  min-width: 120px;
+}
+
+.grades-table__student-cell {
+  position: sticky;
+  left: 0;
+  background-color: #ffffff;
+  z-index: 5;
+  border-right: 2px solid #e5e7eb;
+  text-align: left;
+}
+
+.grades-table__row:hover .grades-table__cell {
+  background-color: #f9fafb;
+}
+.grades-table__row:hover .grades-table__student-cell {
+  background-color: #f9fafb;
+}
+
+.grades-table__add-date-column {
+  min-width: 60px !important;
+  width: 60px;
+  padding: 0 !important;
+}
+
+.add-date-btn {
+  width: 100%;
+  height: 100%;
+  min-height: 48px;
+  background: #eff6ff;
+  border: none;
+  border-radius: 4px;
+  color: #2563eb;
+  font-size: 1.5rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.add-date-btn:hover {
+  background: #dbeafe;
+}

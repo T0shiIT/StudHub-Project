@@ -1,0 +1,16 @@
+/* ===== ГЛОБАЛЬНЫЕ МЕДИА-ЗАПРОСЫ ===== */
+
+/* Для input type="number" — убираем стрелки */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Для material-header (адаптив уже внутри material.css, но дублируем на всякий случай) */
+@media (max-width: 768px) {
+  .material-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

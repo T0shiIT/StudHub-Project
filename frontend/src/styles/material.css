@@ -1,0 +1,323 @@
+/* ============================================================
+   НОВЫЙ ДИЗАЙН СТРАНИЦЫ МАТЕРИАЛА (красивая карточка)
+   ============================================================ */
+
+.material-detail-page {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 24px 20px 40px;
+}
+
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 8px 0;
+  margin-bottom: 20px;
+  transition: color 0.2s;
+}
+.btn-back:hover {
+  color: #1d4ed8;
+}
+
+/* Карточка материала */
+.material-card {
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  border: 1px solid #f1f5f9;
+}
+
+/* Шапка карточки */
+.material-header {
+  padding: 28px 32px 20px 32px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.material-header h1 {
+  font-size: 26px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.material-header .meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+/* Бейджи статуса */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.status-badge--todo {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.status-badge--done {
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: #6ee7b7;
+}
+
+.status-badge--expired {
+  background: #fef2f2;
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
+/* Тело карточки */
+.material-body {
+  padding: 24px 32px 32px 32px;
+}
+
+/* Область загрузки файла */
+.upload-area {
+  border: 2px dashed #d1d5db;
+  border-radius: 16px;
+  padding: 36px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  background: #fafbfc;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-area:hover {
+  border-color: #3b82f6;
+  background: #f8faff;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.06);
+}
+
+.upload-area .icon {
+  font-size: 32px;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.upload-area .title {
+  font-weight: 600;
+  color: #2563eb;
+  font-size: 16px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.upload-area .hint {
+  font-size: 14px;
+  color: #94a3b8;
+  display: block;
+  line-height: 1.5;
+}
+.upload-area .hint:last-child {
+  font-size: 12px;
+  color: #b9c7d9;
+  margin-top: 6px;
+}
+
+/* Предпросмотр выбранного файла */
+.file-preview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #f1f5f9;
+  padding: 12px 18px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  margin-top: 16px;
+}
+
+.file-preview .name {
+  flex: 1;
+  font-size: 14px;
+  color: #1e293b;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-preview .size {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.file-preview .remove {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0 4px;
+  transition: color 0.15s;
+}
+.file-preview .remove:hover {
+  color: #ef4444;
+}
+
+/* Кнопка отправки */
+.btn-submit {
+  padding: 14px 36px;
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+}
+
+.btn-submit:hover:not(:disabled) {
+  background: #1d4ed8;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-submit:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-submit .spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Сообщение об успехе */
+.submit-success {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  border-radius: 12px;
+  color: #065f46;
+  font-weight: 500;
+  font-size: 15px;
+  margin-top: 16px;
+  animation: fadeSlide 0.3s ease;
+}
+
+@keyframes fadeSlide {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Сетка с дополнительной информацией */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.info-card {
+  background: #f8fafc;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid #eef2f6;
+}
+
+.info-card .label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.info-card .value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* Кнопка "Скачать файл" (для типа FILE) */
+.btn-secondary {
+  display: inline-block;
+  padding: 10px 24px;
+  background: #f1f5f9;
+  color: #1e293b;
+  border-radius: 10px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+.btn-secondary:hover {
+  background: #e2e8f0;
+}
+
+/* Адаптивность */
+@media (max-width: 640px) {
+  .material-header {
+    padding: 20px 20px 16px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .material-header h1 {
+    font-size: 22px;
+  }
+  .material-body {
+    padding: 20px 20px 24px;
+  }
+  .upload-area {
+    padding: 24px 16px;
+  }
+  .btn-submit {
+    width: 100%;
+    justify-content: center;
+  }
+  .info-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
