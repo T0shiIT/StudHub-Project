@@ -87,16 +87,17 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
         user.setRole(DEFAULT_ROLE);
         User savedUser = userRepository.save(user);
 
-        CppUserClient.Result result = cppUserClient.syncOAuth(Map.of(
-                "user_id", String.valueOf(savedUser.getId()),
-                "email", savedUser.getEmail(),
-                "login", savedUser.getLogin(),
-                "password_hash", OAUTH_PASSWORD_HASH,
-                "first_name", savedUser.getFirstName(),
-                "last_name", savedUser.getLastName(),
-                "group_name", savedUser.getGroupName(),
-                "role", savedUser.getRole()
-        ));
+        Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("user_id", String.valueOf(savedUser.getId()));
+        payload.put("email", savedUser.getEmail());
+        payload.put("login", savedUser.getLogin());
+        payload.put("password_hash", OAUTH_PASSWORD_HASH);
+        payload.put("first_name", savedUser.getFirstName());
+        payload.put("last_name", savedUser.getLastName());
+        payload.put("group_name", defaultIfBlank(savedUser.getGroupName(), ""));
+        payload.put("role", savedUser.getRole());
+
+        CppUserClient.Result result = cppUserClient.syncOAuth(payload);
         if (!result.isSuccess()) {
             log.warn("C++ OAuth sync failed for {}: status={}, body={}", email, result.status(), result.body());
         } else {
