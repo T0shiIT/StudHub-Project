@@ -1,93 +1,210 @@
-import requests
-import pytest
 import uuid
- 
-BASE_URL = "http://localhost:8080"
- 
- 
-@pytest.fixture
-def session():
-    return requests.Session()
+import pytest
+import requests
+from conftest import BASE_URL, BYPASS, make_user_payload, register_and_login
  
  
-def test_unique_user(session):
-    uid = str(uuid.uuid4())[:8]
+#прохождение регистрации
+class TestRegistration:
  
-    # 1. Регистрация
-    user_data = {
-        "email":     f"test_{uid}@gmail.com",
-        "firstName": "User1",
-        "lastName":  "LastName1",
-        "login":     f"user_{uid}",
-        "group":     "ПИ-2025",
-        "password":  "1234567890",
-        "code":      "admin"          # bypass-код
-    }
+    def test_successful_registration_returns_201(self):
+        sess = requests.Session()
+        data = make_user_payload()
+        r = sess.post(f"{BASE_URL}/api/auth/register", json=data, timeout=30)
+        assert r.status_code == 201
+        body = r.json()
+        assert "id" in body
+        assert body["email"] == data["email"]
+        assert body["login"] == data["login"]
+        assert "passwordHash" not in body  # хэш никогда не должен возвращаться
  
-    print(f"\n[1] Регистрация: {user_data['email']}")
-    reg_res = session.post(f"{BASE_URL}/api/auth/register", json=user_data, timeout=30)
-    print(f"    status : {reg_res.status_code}")
-    print(f"    body   : {reg_res.text}")
-    assert reg_res.status_code == 201, f"Регистрация упала: {reg_res.text}"
+    def test_registration_with_bypass_code_gives_admin_role(self):
+        sess = requests.Session()
+        data = make_user_payload(role_code=BYPASS)
+        r = sess.post(f"{BASE_URL}/api/auth/register", json=data, timeout=30)
+        assert r.status_code == 201
+        assert r.json()["role"] == "ADMIN"
  
-    reg_json = reg_res.json()
-    user_id  = reg_json["id"]
-    role     = reg_json.get("role")
-    print(f"    user_id={user_id}  role={role}")
+    def test_registration_without_bypass_code_gives_student_role(self):
+        sess = requests.Session()
+        data = make_user_payload()
+        r = sess.post(f"{BASE_URL}/api/auth/register", json=data, timeout=30)
+        assert r.status_code == 201
+        assert r.json().get("role") in ("STUDENT", None)  # STUDENT или поле отсутствует
  
-    # bypass-код должен дать ADMIN сразу
-    assert role == "ADMIN", f"Ожидали ADMIN, получили {role}"
+    def test_duplicate_email_returns_409(self):
+        sess = requests.Session()
+        data = make_user_payload()
+        sess.post(f"{BASE_URL}/api/auth/register", json=data, timeout=30)
  
-    # 2. Логин
-    print(f"\n[2] Логин: {user_data['email']}")
-    login_res = session.post(
-        f"{BASE_URL}/api/auth/login",
-        json={"email": user_data["email"], "password": user_data["password"]},
-        timeout=10
-    )
-    print(f"    status : {login_res.status_code}")
-    print(f"    body   : {login_res.text}")
-    assert login_res.status_code == 200, f"Логин упал: {login_res.text}"
+        # Второй запрос с тем же email, другим логином
+        data2 = {**data, "login": "unique_" + uuid.uuid4().hex[:6]}
+        r = sess.post(f"{BASE_URL}/api/auth/register", json=data2, timeout=30)
+        assert r.status_code == 409
  
-    # 3. Профиль текущего пользователя
-    print(f"\n[3] Профиль /api/user")
-    profile_res = session.get(f"{BASE_URL}/api/user", timeout=10)
-    print(f"    status : {profile_res.status_code}")
-    print(f"    body   : {profile_res.text}")
-    assert profile_res.status_code == 200, f"/api/user вернул {profile_res.status_code}: {profile_res.text}"
+    def test_duplicate_login_returns_409(self):
+        sess = requests.Session()
+        data = make_user_payload()
+        sess.post(f"{BASE_URL}/api/auth/register", json=data, timeout=30)
+ 
+        data2 = {**data, "email": f"other_{uuid.uuid4().hex[:6]}@studhub.test"}
+        r = sess.post(f"{BASE_URL}/api/auth/register", json=data2, timeout=30)
+        assert r.status_code == 409
+ 
+    def test_missing_required_fields_returns_4xx(self):
+        sess = requests.Session()
+        # Пустое тело
+        r = sess.post(f"{BASE_URL}/api/auth/register", json={}, timeout=10)
+        assert r.status_code in (400, 422)
+ 
+    def test_invalid_email_format_returns_4xx(self):
+        sess = requests.Session()
+        data = make_user_payload()
+        data["email"] = "not-an-email"
+        r = sess.post(f"{BASE_URL}/api/auth/register", json=data, timeout=10)
+        assert r.status_code in (400, 422)
+ 
+    def test_too_short_password_returns_4xx(self):
+        """Пароль < 6 символов — нарушение @Size(min=6)."""
+        sess = requests.Session()
+        data = make_user_payload()
+        data["password"] = "123"
+        r = sess.post(f"{BASE_URL}/api/auth/register", json=data, timeout=10)
+        assert r.status_code in (400, 422)
+ 
+    def test_too_short_login_returns_4xx(self):
+        """Логин < 3 символов — нарушение @Size(min=3)."""
+        sess = requests.Session()
+        data = make_user_payload()
+        data["login"] = "ab"
+        r = sess.post(f"{BASE_URL}/api/auth/register", json=data, timeout=10)
+        assert r.status_code in (400, 422)
+ 
+ 
+#логин
+class TestLogin:
+ 
+    def test_login_by_email_returns_200(self):
+        user = register_and_login()
+        # Новая сессия — без куков регистрации
+        sess = requests.Session()
+        r = sess.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": user["email"], "password": user["password"]},
+            timeout=10,
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["email"] == user["email"]
+ 
+    def test_login_by_login_field_returns_200(self):
+        """Логин принимает логин (не только email)."""
+        user = register_and_login()
+        sess = requests.Session()
+        r = sess.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": user["login"], "password": user["password"]},
+            timeout=10,
+        )
+        assert r.status_code == 200
+ 
+    def test_wrong_password_returns_401(self):
+        user = register_and_login()
+        sess = requests.Session()
+        r = sess.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": user["email"], "password": "wrongpass"},
+            timeout=10,
+        )
+        assert r.status_code == 401
+ 
+    def test_nonexistent_user_returns_401(self):
+        sess = requests.Session()
+        r = sess.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": "ghost@studhub.test", "password": "whatever"},
+            timeout=10,
+        )
+        assert r.status_code == 401
+ 
+    def test_empty_credentials_returns_400(self):
+        sess = requests.Session()
+        r = sess.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": "", "password": ""},
+            timeout=10,
+        )
+        assert r.status_code == 400
+ 
+ 
+#проверка профиля
+class TestProfile:
+ 
+    def test_authenticated_user_can_get_profile(self, student):
+        r = student["session"].get(f"{BASE_URL}/api/user", timeout=10)
+        assert r.status_code == 200
+        body = r.json()
+        assert body["email"] == student["email"]
+        assert body["login"] == student["login"]
+ 
+    def test_unauthenticated_request_returns_401(self):
+        sess = requests.Session()
+        r = sess.get(f"{BASE_URL}/api/user", timeout=10)
+        assert r.status_code == 401
+ 
+    def test_profile_does_not_expose_password_hash(self, student):
+        r = student["session"].get(f"{BASE_URL}/api/user", timeout=10)
+        body = r.json()
+        assert "passwordHash" not in body
+        assert "password_hash" not in body
+        assert "password" not in body
+ 
+    def test_admin_profile_has_correct_role(self, admin):
+        r = admin["session"].get(f"{BASE_URL}/api/user", timeout=10)
+        assert r.status_code == 200
+        assert r.json()["role"] == "ADMIN"
+ 
+ 
+#смена ролей
+class TestRoleChange:
+ 
+    def test_admin_can_change_own_role_to_student(self, admin_once):
+        sess = admin_once["session"]
+        sess.get(f"{BASE_URL}/api/user", timeout=10)
+        csrf = sess.cookies.get("XSRF-TOKEN")
 
-    profile = profile_res.json()
-    print(f"    profile: {profile}")
-    assert profile.get("email") == user_data["email"]
-    assert profile.get("role")  == "ADMIN"
-
-    # CSRF токен из куки (Spring кладёт его после первого GET)
-    csrf_token = session.cookies.get("XSRF-TOKEN")
-    print(f"\n    CSRF token: {csrf_token}")
-
-    # 4. Смена роли (сам себе, раз уже ADMIN)
-    print(f"\n[4] Смена роли → STUDENT")
-    role_res = session.post(
-        f"{BASE_URL}/api/user/change-role",
-        json={"target_user_id": str(user_id), "role": "STUDENT"},
-        headers={"X-XSRF-TOKEN": csrf_token},   #csrf токен
-        timeout=10
-    )
-    print(f"    status : {role_res.status_code}")
-    print(f"    body   : {role_res.text}")
-    assert role_res.status_code == 200, f"change-role упал: {role_res.text}"
-
-    # 5. Проверяем что роль обновилась
-    print(f"\n[5] Проверка роли после смены")
-    profile2_res = session.get(f"{BASE_URL}/api/user", timeout=10)
-    print(f"    status : {profile2_res.status_code}")
-    print(f"    body   : {profile2_res.text}")
-    assert profile2_res.status_code == 200
+        r = sess.post(
+            f"{BASE_URL}/api/user/change-role",
+            json={"target_user_id": str(admin_once["id"]), "role": "STUDENT"},
+            headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+            timeout=10,
+        )
+        assert r.status_code == 200
+        profile = sess.get(f"{BASE_URL}/api/user", timeout=10).json()
+        assert profile["role"] == "STUDENT"
  
-    profile2 = profile2_res.json()
-    print(f"    profile: {profile2}")
-    assert profile2.get("role") == "STUDENT", \
-        f"Роль не изменилась: {profile2.get('role')}"
+    def test_student_cannot_change_role(self, student):
+        sess = student["session"]
+        sess.get(f"{BASE_URL}/api/user", timeout=10)
+        csrf = sess.cookies.get("XSRF-TOKEN")
  
-    print("\n[OK] Все шаги прошли успешно")
-
+        r = sess.post(
+            f"{BASE_URL}/api/user/change-role",
+            json={"target_user_id": str(student["id"]), "role": "ADMIN"},
+            headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+            timeout=10,
+        )
+        assert r.status_code in (403, 401)
+ 
+    def test_invalid_role_returns_4xx(self, admin):
+        sess = admin["session"]
+        sess.get(f"{BASE_URL}/api/user", timeout=10)
+        csrf = sess.cookies.get("XSRF-TOKEN")
+ 
+        r = sess.post(
+            f"{BASE_URL}/api/user/change-role",
+            json={"target_user_id": str(admin["id"]), "role": "SUPERUSER"},
+            headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+            timeout=10,
+        )
+        assert r.status_code in (400, 422)

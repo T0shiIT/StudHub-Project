@@ -27,7 +27,20 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
 
--- GRADES (исправленная версия с course_id)
+-- COURSES (ВАЖНО: ДО GRADES)
+CREATE TABLE IF NOT EXISTS courses (
+    course_id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    teacher_id INTEGER NOT NULL REFERENCES app_users(user_id),
+    cover_image TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    is_deleted BOOLEAN DEFAULT FALSE,
+    status VARCHAR(20) DEFAULT 'ACTIVE' NOT NULL
+);
+
+-- GRADES (ПОСЛЕ COURSES)
 CREATE TABLE IF NOT EXISTS grades (
     id SERIAL PRIMARY KEY,
     student_id INTEGER NOT NULL REFERENCES app_users(user_id),
@@ -38,8 +51,11 @@ CREATE TABLE IF NOT EXISTS grades (
     teacher_id INTEGER REFERENCES app_users(user_id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uk_student_subject_date_course UNIQUE (student_id, subject, date, course_id)
+    CONSTRAINT uk_student_subject_date_course
+        UNIQUE (student_id, subject, date, course_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_grades_course ON grades(course_id);
 
 -- SCHEDULE UPLOADS
 CREATE TABLE IF NOT EXISTS schedule_uploads (
@@ -60,27 +76,6 @@ CREATE TABLE IF NOT EXISTS email_verification_tokens (
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
     used_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- COURSES
-CREATE TABLE IF NOT EXISTS courses (
-    course_id SERIAL PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    teacher_id INTEGER NOT NULL REFERENCES app_users(user_id),
-    cover_image TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    is_deleted BOOLEAN DEFAULT FALSE,
-    status VARCHAR(20) DEFAULT 'ACTIVE' NOT NULL
-);
-
--- ENROLLMENTS
-CREATE TABLE IF NOT EXISTS enrollments (
-    enrollment_id SERIAL PRIMARY KEY,
-    course_id INTEGER NOT NULL REFERENCES courses(course_id) ON DELETE CASCADE,
-    user_id INTEGER NOT NULL REFERENCES app_users(user_id) ON DELETE CASCADE,
-    UNIQUE(course_id, user_id)
 );
 
 -- COURSE SECTIONS
@@ -131,7 +126,11 @@ CREATE TABLE IF NOT EXISTS answer_options (
     question_id BIGINT NOT NULL REFERENCES test_questions(id) ON DELETE CASCADE
 );
 
-ALTER TABLE test_questions ADD CONSTRAINT fk_correct_option FOREIGN KEY (correct_option_id) REFERENCES answer_options(id) ON DELETE SET NULL;
+ALTER TABLE test_questions
+ADD CONSTRAINT fk_correct_option
+FOREIGN KEY (correct_option_id)
+REFERENCES answer_options(id)
+ON DELETE SET NULL;
 
 -- TEST ATTEMPTS
 CREATE TABLE IF NOT EXISTS test_attempts (
@@ -150,18 +149,18 @@ CREATE TABLE IF NOT EXISTS student_answers (
     selected_option_id BIGINT NOT NULL REFERENCES answer_options(id) ON DELETE CASCADE
 );
 
+-- ANNOUNCEMENTS
 CREATE TABLE IF NOT EXISTS announcements (
-    id         VARCHAR(36) PRIMARY KEY,
-    user_id    VARCHAR(50),
-    user_name  VARCHAR(255),
+    id VARCHAR(36) PRIMARY KEY,
+    user_id VARCHAR(50),
+    user_name VARCHAR(255),
     user_group VARCHAR(100),
-    content    TEXT,
-    image_url  TEXT,
+    content TEXT,
+    image_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    role       VARCHAR(50)
+    role VARCHAR(50)
 );
 
--- Индексы
+-- INDEXES
 CREATE INDEX IF NOT EXISTS idx_materials_section ON course_materials(section_id);
 CREATE INDEX IF NOT EXISTS idx_submissions_material_user ON material_submissions(material_id, user_id);
-CREATE INDEX IF NOT EXISTS idx_grades_course ON grades(course_id);

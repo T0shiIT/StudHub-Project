@@ -18,6 +18,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import jakarta.servlet.http.HttpServletResponse;
+
 import java.util.List;
 
 @Configuration
@@ -50,6 +52,25 @@ public class SecurityConfig {
                         )
                 )
                 .securityContext(sc -> sc.securityContextRepository(securityContextRepository))
+                //новенькое:
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((request, response, authException) -> {
+                                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                                response.setContentType("application/json;charset=UTF-8");
+                                response.getWriter().write("{\"error\":\"Unauthorized\"}");
+                        })
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                        if (request.getUserPrincipal() == null) {
+                        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                        response.setContentType("application/json;charset=UTF-8");
+                        response.getWriter().write("{\"error\":\"Unauthorized\"}");
+                        } else {
+                        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                        response.setContentType("application/json;charset=UTF-8");
+                        response.getWriter().write("{\"error\":\"Forbidden\"}");
+                        }
+                })
+)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/", "/api/test", "/api/csrf", "/api/auth/**", "/error").permitAll()
                         .requestMatchers("/api/internal/**").permitAll()
@@ -69,6 +90,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/user", "/api/cpp-profile", "/api/schedule/latest").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/courses/**").hasAnyRole("TEACHER", "ADMIN")
                         .requestMatchers("/api/materials/**").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/grades").authenticated() //grades
                         .anyRequest().authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2.successHandler(oAuth2LoginSuccessHandler))

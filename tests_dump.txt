@@ -1,0 +1,1068 @@
+﻿
+===== C:\Users\User\Desktop\project\StudHub-Project\tests\conftest.py =====
+
+import uuid
+import pytest
+import requests
+
+BASE_URL = "http://localhost:8080"
+CHAT_URL = "ws://localhost:9000"
+BYPASS   = "admin"
+
+@pytest.fixture(scope="function")
+def admin_once():
+    """Admin С‚РѕР»СЊРєРѕ РґР»СЏ С‚РµСЃС‚РѕРІ РєРѕС‚РѕСЂС‹Рµ РјРµРЅСЏСЋС‚ РµРіРѕ СЂРѕР»СЊ."""
+    return register_and_login(role_code=BYPASS)
+
+def make_user_payload(role_code: str = "") -> dict:
+    uid = uuid.uuid4().hex[:8]
+    payload = {
+        "email":     f"test_{uid}@gmail.com",
+        "firstName": "Test",
+        "lastName":  "User",
+        "login":     f"user_{uid}",
+        "group":     "РџР-2025",
+        "password":  "Passw0rd!",
+    }
+    if role_code:
+        payload["code"] = role_code
+    return payload
+
+
+def register_and_login(role_code: str = "") -> dict:
+    """Р РµРіРёСЃС‚СЂРёСЂСѓРµС‚ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ, Р»РѕРіРёРЅРёС‚СЃСЏ, РІРѕР·РІСЂР°С‰Р°РµС‚ dict СЃ session."""
+    session = requests.Session()
+    data = make_user_payload(role_code)
+
+    reg = session.post(f"{BASE_URL}/api/auth/register", json=data, timeout=30)
+    assert reg.status_code == 201, f"Р РµРіРёСЃС‚СЂР°С†РёСЏ РїСЂРѕРІР°Р»РёР»Р°СЃСЊ: {reg.text}"
+    body = reg.json()
+
+    #РЇРІРЅС‹Р№ Р»РѕРіРёРЅ (СЃРµСЃСЃРёСЏ РїРѕСЃР»Рµ СЂРµРіРёСЃС‚СЂР°С†РёРё РјРѕР¶РµС‚ РЅРµ СЃРѕС…СЂР°РЅСЏС‚СЊСЃСЏ)
+    login = session.post(
+        f"{BASE_URL}/api/auth/login",
+        json={"email": data["email"], "password": data["password"]},
+        timeout=10,
+    )
+    assert login.status_code == 200, f"Р›РѕРіРёРЅ РїСЂРѕРІР°Р»РёР»СЃСЏ: {login.text}"
+
+    return {
+        "id":       body["id"],
+        "email":    data["email"],
+        "login":    data["login"],
+        "password": data["password"],
+        "role":     body.get("role", "STUDENT"),
+        "session":  session,
+    }
+
+@pytest.fixture(scope="session")
+def student():
+    return register_and_login()
+
+
+@pytest.fixture(scope="session")
+def admin():
+    user = register_and_login(role_code=BYPASS)
+    return user
+
+
+@pytest.fixture(scope="session")
+def teacher():
+    """РЎРѕР·РґР°С‘Рј РєР°Рє ADMIN, РїРѕС‚РѕРј РјРµРЅСЏРµРј СЂРѕР»СЊ РЅР° TEACHER."""
+    user = register_and_login(role_code=BYPASS)
+    sess = user["session"]
+
+    # РџРѕР»СѓС‡Р°РµРј CSRF
+    sess.get(f"{BASE_URL}/api/user", timeout=10)
+    csrf = sess.cookies.get("XSRF-TOKEN")
+
+    r = sess.post(
+        f"{BASE_URL}/api/user/change-role",
+        json={"target_user_id": str(user["id"]), "role": "TEACHER"},
+        headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+        timeout=10,
+    )
+    assert r.status_code == 200, f"РЎРјРµРЅР° СЂРѕР»Рё РЅР° TEACHER РїСЂРѕРІР°Р»РёР»Р°СЃСЊ: {r.text}"
+    user["role"] = "TEACHER"
+    return user
+
+===== C:\Users\User\Desktop\project\StudHub-Project\tests\test_auth.py =====
+
+import uuid
+import pytest
+import requests
+from conftest import BASE_URL, BYPASS, make_user_payload, register_and_login
+ 
+ 
+#РїСЂРѕС…РѕР¶РґРµРЅРёРµ СЂРµРіРёСЃС‚СЂР°С†РёРё
+class TestRegistration:
+ 
+    def test_successful_registration_returns_201(self):
+        sess = requests.Session()
+        data = make_user_payload()
+        r = sess.post(f"{BASE_URL}/api/auth/register", json=data, timeout=30)
+        assert r.status_code == 201
+        body = r.json()
+        assert "id" in body
+        assert body["email"] == data["email"]
+        assert body["login"] == data["login"]
+        assert "passwordHash" not in body  # С…СЌС€ РЅРёРєРѕРіРґР° РЅРµ РґРѕР»Р¶РµРЅ РІРѕР·РІСЂР°С‰Р°С‚СЊСЃСЏ
+ 
+    def test_registration_with_bypass_code_gives_admin_role(self):
+        sess = requests.Session()
+        data = make_user_payload(role_code=BYPASS)
+        r = sess.post(f"{BASE_URL}/api/auth/register", json=data, timeout=30)
+        assert r.status_code == 201
+        assert r.json()["role"] == "ADMIN"
+ 
+    def test_registration_without_bypass_code_gives_student_role(self):
+        sess = requests.Session()
+        data = make_user_payload()
+        r = sess.post(f"{BASE_URL}/api/auth/register", json=data, timeout=30)
+        assert r.status_code == 201
+        assert r.json().get("role") in ("STUDENT", None)  # STUDENT РёР»Рё РїРѕР»Рµ РѕС‚СЃСѓС‚СЃС‚РІСѓРµС‚
+ 
+    def test_duplicate_email_returns_409(self):
+        sess = requests.Session()
+        data = make_user_payload()
+        sess.post(f"{BASE_URL}/api/auth/register", json=data, timeout=30)
+ 
+        # Р’С‚РѕСЂРѕР№ Р·Р°РїСЂРѕСЃ СЃ С‚РµРј Р¶Рµ email, РґСЂСѓРіРёРј Р»РѕРіРёРЅРѕРј
+        data2 = {**data, "login": "unique_" + uuid.uuid4().hex[:6]}
+        r = sess.post(f"{BASE_URL}/api/auth/register", json=data2, timeout=30)
+        assert r.status_code == 409
+ 
+    def test_duplicate_login_returns_409(self):
+        sess = requests.Session()
+        data = make_user_payload()
+        sess.post(f"{BASE_URL}/api/auth/register", json=data, timeout=30)
+ 
+        data2 = {**data, "email": f"other_{uuid.uuid4().hex[:6]}@studhub.test"}
+        r = sess.post(f"{BASE_URL}/api/auth/register", json=data2, timeout=30)
+        assert r.status_code == 409
+ 
+    def test_missing_required_fields_returns_4xx(self):
+        sess = requests.Session()
+        # РџСѓСЃС‚РѕРµ С‚РµР»Рѕ
+        r = sess.post(f"{BASE_URL}/api/auth/register", json={}, timeout=10)
+        assert r.status_code in (400, 422)
+ 
+    def test_invalid_email_format_returns_4xx(self):
+        sess = requests.Session()
+        data = make_user_payload()
+        data["email"] = "not-an-email"
+        r = sess.post(f"{BASE_URL}/api/auth/register", json=data, timeout=10)
+        assert r.status_code in (400, 422)
+ 
+    def test_too_short_password_returns_4xx(self):
+        """РџР°СЂРѕР»СЊ < 6 СЃРёРјРІРѕР»РѕРІ вЂ” РЅР°СЂСѓС€РµРЅРёРµ @Size(min=6)."""
+        sess = requests.Session()
+        data = make_user_payload()
+        data["password"] = "123"
+        r = sess.post(f"{BASE_URL}/api/auth/register", json=data, timeout=10)
+        assert r.status_code in (400, 422)
+ 
+    def test_too_short_login_returns_4xx(self):
+        """Р›РѕРіРёРЅ < 3 СЃРёРјРІРѕР»РѕРІ вЂ” РЅР°СЂСѓС€РµРЅРёРµ @Size(min=3)."""
+        sess = requests.Session()
+        data = make_user_payload()
+        data["login"] = "ab"
+        r = sess.post(f"{BASE_URL}/api/auth/register", json=data, timeout=10)
+        assert r.status_code in (400, 422)
+ 
+ 
+#Р»РѕРіРёРЅ
+class TestLogin:
+ 
+    def test_login_by_email_returns_200(self):
+        user = register_and_login()
+        # РќРѕРІР°СЏ СЃРµСЃСЃРёСЏ вЂ” Р±РµР· РєСѓРєРѕРІ СЂРµРіРёСЃС‚СЂР°С†РёРё
+        sess = requests.Session()
+        r = sess.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": user["email"], "password": user["password"]},
+            timeout=10,
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["email"] == user["email"]
+ 
+    def test_login_by_login_field_returns_200(self):
+        """Р›РѕРіРёРЅ РїСЂРёРЅРёРјР°РµС‚ Р»РѕРіРёРЅ (РЅРµ С‚РѕР»СЊРєРѕ email)."""
+        user = register_and_login()
+        sess = requests.Session()
+        r = sess.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": user["login"], "password": user["password"]},
+            timeout=10,
+        )
+        assert r.status_code == 200
+ 
+    def test_wrong_password_returns_401(self):
+        user = register_and_login()
+        sess = requests.Session()
+        r = sess.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": user["email"], "password": "wrongpass"},
+            timeout=10,
+        )
+        assert r.status_code == 401
+ 
+    def test_nonexistent_user_returns_401(self):
+        sess = requests.Session()
+        r = sess.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": "ghost@studhub.test", "password": "whatever"},
+            timeout=10,
+        )
+        assert r.status_code == 401
+ 
+    def test_empty_credentials_returns_400(self):
+        sess = requests.Session()
+        r = sess.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": "", "password": ""},
+            timeout=10,
+        )
+        assert r.status_code == 400
+ 
+ 
+#РїСЂРѕРІРµСЂРєР° РїСЂРѕС„РёР»СЏ
+class TestProfile:
+ 
+    def test_authenticated_user_can_get_profile(self, student):
+        r = student["session"].get(f"{BASE_URL}/api/user", timeout=10)
+        assert r.status_code == 200
+        body = r.json()
+        assert body["email"] == student["email"]
+        assert body["login"] == student["login"]
+ 
+    def test_unauthenticated_request_returns_401(self):
+        sess = requests.Session()
+        r = sess.get(f"{BASE_URL}/api/user", timeout=10)
+        assert r.status_code == 401
+ 
+    def test_profile_does_not_expose_password_hash(self, student):
+        r = student["session"].get(f"{BASE_URL}/api/user", timeout=10)
+        body = r.json()
+        assert "passwordHash" not in body
+        assert "password_hash" not in body
+        assert "password" not in body
+ 
+    def test_admin_profile_has_correct_role(self, admin):
+        r = admin["session"].get(f"{BASE_URL}/api/user", timeout=10)
+        assert r.status_code == 200
+        assert r.json()["role"] == "ADMIN"
+ 
+ 
+#СЃРјРµРЅР° СЂРѕР»РµР№
+class TestRoleChange:
+ 
+    def test_admin_can_change_own_role_to_student(self, admin_once):
+        sess = admin_once["session"]
+        sess.get(f"{BASE_URL}/api/user", timeout=10)
+        csrf = sess.cookies.get("XSRF-TOKEN")
+
+        r = sess.post(
+            f"{BASE_URL}/api/user/change-role",
+            json={"target_user_id": str(admin_once["id"]), "role": "STUDENT"},
+            headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+            timeout=10,
+        )
+        assert r.status_code == 200
+        profile = sess.get(f"{BASE_URL}/api/user", timeout=10).json()
+        assert profile["role"] == "STUDENT"
+ 
+    def test_student_cannot_change_role(self, student):
+        sess = student["session"]
+        sess.get(f"{BASE_URL}/api/user", timeout=10)
+        csrf = sess.cookies.get("XSRF-TOKEN")
+ 
+        r = sess.post(
+            f"{BASE_URL}/api/user/change-role",
+            json={"target_user_id": str(student["id"]), "role": "ADMIN"},
+            headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+            timeout=10,
+        )
+        assert r.status_code in (403, 401)
+ 
+    def test_invalid_role_returns_4xx(self, admin):
+        sess = admin["session"]
+        sess.get(f"{BASE_URL}/api/user", timeout=10)
+        csrf = sess.cookies.get("XSRF-TOKEN")
+ 
+        r = sess.post(
+            f"{BASE_URL}/api/user/change-role",
+            json={"target_user_id": str(admin["id"]), "role": "SUPERUSER"},
+            headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+            timeout=10,
+        )
+        assert r.status_code in (400, 422)
+
+===== C:\Users\User\Desktop\project\StudHub-Project\tests\test_chat.py =====
+
+ 
+import json
+import time
+import uuid
+import threading
+import pytest
+import requests
+import websocket
+from conftest import BASE_URL, CHAT_URL, register_and_login
+ 
+ 
+CHAT_HTTP = CHAT_URL.replace("ws://", "http://").replace("wss://", "https://")
+ 
+ 
+def ws_token(user: dict) -> str:
+    """РўРѕРєРµРЅ С„РѕСЂРјР°С‚Р° userID:login."""
+    return f"{user['id']}:{user['login']}"
+ 
+ 
+def connect(room_id: str, token: str, timeout: int = 5) -> websocket.WebSocket:
+    ws = websocket.create_connection(
+        f"{CHAT_URL}/ws/{room_id}?token={token}",
+        timeout=timeout,
+    )
+    return ws
+ 
+ 
+def drain_history(ws: websocket.WebSocket, marker: str | None = None, timeout: float = 2.0) -> list[dict]:
+    """
+    Р§РёС‚Р°РµС‚ СЃРѕРѕР±С‰РµРЅРёСЏ РёР· WS РґРѕ С‚Р°Р№РјР°СѓС‚Р° (РёСЃС‚РѕСЂРёСЏ РїСЂРёС…РѕРґРёС‚ СЃСЂР°Р·Сѓ РїРѕСЃР»Рµ connect).
+    Р•СЃР»Рё marker Р·Р°РґР°РЅ вЂ” С‡РёС‚Р°РµС‚ РїРѕРєР° РЅРµ РїРѕР»СѓС‡РёС‚ СЃРѕРѕР±С‰РµРЅРёРµ СЃ С‚Р°РєРёРј С‚РµРєСЃС‚РѕРј.
+    """
+    messages = []
+    ws.settimeout(timeout)
+    while True:
+        try:
+            raw = ws.recv()
+            msg = json.loads(raw)
+            messages.append(msg)
+            if marker and msg.get("text") == marker:
+                break
+        except websocket.WebSocketTimeoutException:
+            break
+    ws.settimeout(5)
+    return messages
+ 
+#Р¶РёРІ Р»Рё С‡Р°С‚
+class TestHealth:
+ 
+    def test_health_endpoint_ok(self):
+        r = requests.get(f"{CHAT_HTTP}/health", timeout=5)
+        assert r.status_code == 200
+ 
+#РјРѕР¶РЅРѕ Р»Рё РѕС‚РїСЂР°РІРёС‚СЊ СЃРѕРѕР±С‰РµРЅРёСЏ
+class TestMessageDelivery:
+ 
+    def test_message_delivered_to_second_user(self):
+        u1 = register_and_login()
+        u2 = register_and_login()
+        room_id = f"delivery-{uuid.uuid4().hex[:8]}"
+ 
+        ws1 = connect(room_id, ws_token(u1))
+        ws2 = connect(room_id, ws_token(u2))
+ 
+        # РџСЂРѕРїСѓСЃРєР°РµРј РёСЃС‚РѕСЂРёСЋ Сѓ РѕР±РѕРёС…
+        drain_history(ws1)
+        drain_history(ws2)
+ 
+        text = f"hello-{uuid.uuid4().hex[:6]}"
+        ws1.send(json.dumps({"text": text}))
+ 
+        # u2 РґРѕР»Р¶РµРЅ РїРѕР»СѓС‡РёС‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ
+        ws2.settimeout(5)
+        raw = ws2.recv()
+        msg = json.loads(raw)
+ 
+        assert msg["text"] == text
+        assert msg["sender_id"] == u1["id"]
+        assert msg["login"] == u1["login"]
+        assert "sent_at" in msg
+ 
+        ws1.close(); ws2.close()
+ 
+    def test_sender_also_receives_own_message(self):
+        """РћС‚РїСЂР°РІРёС‚РµР»СЊ РїРѕР»СѓС‡Р°РµС‚ СЃРІРѕС‘ СЃРѕРѕР±С‰РµРЅРёРµ РѕР±СЂР°С‚РЅРѕ (broadcast РІСЃРµРј РІ РєРѕРјРЅР°С‚Рµ)."""
+        u1 = register_and_login()
+        room_id = f"self-{uuid.uuid4().hex[:8]}"
+ 
+        ws = connect(room_id, ws_token(u1))
+        drain_history(ws)
+ 
+        text = f"self-{uuid.uuid4().hex[:6]}"
+        ws.send(json.dumps({"text": text}))
+ 
+        ws.settimeout(5)
+        msg = json.loads(ws.recv())
+        assert msg["text"] == text
+ 
+        ws.close()
+ 
+    def test_message_has_correct_room_id(self):
+        u1 = register_and_login()
+        u2 = register_and_login()
+        room_id = f"room-{uuid.uuid4().hex[:8]}"
+ 
+        ws1 = connect(room_id, ws_token(u1))
+        ws2 = connect(room_id, ws_token(u2))
+        drain_history(ws1); drain_history(ws2)
+ 
+        text = "room-check"
+        ws1.send(json.dumps({"text": text}))
+ 
+        ws2.settimeout(5)
+        msg = json.loads(ws2.recv())
+        assert msg.get("room_id") == room_id
+ 
+        ws1.close(); ws2.close()
+ 
+    def test_messages_isolated_between_rooms(self):
+        """РЎРѕРѕР±С‰РµРЅРёРµ РІ РѕРґРЅРѕР№ РєРѕРјРЅР°С‚Рµ РЅРµ РїРѕРїР°РґР°РµС‚ РІ РґСЂСѓРіСѓСЋ."""
+        u1 = register_and_login()
+        u2 = register_and_login()
+ 
+        room_a = f"roomA-{uuid.uuid4().hex[:8]}"
+        room_b = f"roomB-{uuid.uuid4().hex[:8]}"
+ 
+        ws_a = connect(room_a, ws_token(u1))
+        ws_b = connect(room_b, ws_token(u2))
+        drain_history(ws_a); drain_history(ws_b)
+ 
+        ws_a.send(json.dumps({"text": "secret-for-room-a"}))
+ 
+        # ws_b РЅРµ РґРѕР»Р¶РµРЅ РЅРёС‡РµРіРѕ РїРѕР»СѓС‡РёС‚СЊ
+        msgs = drain_history(ws_b, timeout=2.0)
+        texts = [m["text"] for m in msgs]
+        assert "secret-for-room-a" not in texts
+ 
+        ws_a.close(); ws_b.close()
+ 
+    def test_empty_text_not_broadcast(self):
+        """РџСѓСЃС‚РѕР№ С‚РµРєСЃС‚ РЅРµ РґРѕР»Р¶РµРЅ СЂР°СЃСЃС‹Р»Р°С‚СЊСЃСЏ РґСЂСѓРіРёРј РїРѕР»СЊР·РѕРІР°С‚РµР»СЏРј."""
+        u1 = register_and_login()
+        u2 = register_and_login()
+        room_id = f"empty-{uuid.uuid4().hex[:8]}"
+ 
+        ws1 = connect(room_id, ws_token(u1))
+        ws2 = connect(room_id, ws_token(u2))
+        drain_history(ws1); drain_history(ws2)
+ 
+        ws1.send(json.dumps({"text": ""}))      # РїСѓСЃС‚РѕР№ С‚РµРєСЃС‚ вЂ” РёРіРЅРѕСЂРёСЂСѓРµС‚СЃСЏ
+        ws1.send(json.dumps({}))                 # РЅРµС‚ РїРѕР»СЏ text вЂ” РёРіРЅРѕСЂРёСЂСѓРµС‚СЃСЏ
+ 
+        # Р§С‚РѕР±С‹ СѓР±РµРґРёС‚СЊСЃСЏ вЂ” С€Р»С‘Рј РјР°СЂРєРµСЂ
+        marker = f"marker-{uuid.uuid4().hex[:6]}"
+        ws1.send(json.dumps({"text": marker}))
+ 
+        msgs = drain_history(ws2, marker=marker)
+        texts = [m["text"] for m in msgs]
+        assert "" not in texts
+        assert marker in texts
+ 
+        ws1.close(); ws2.close()
+ 
+ 
+#WebSocket РїСЂРѕРІРµСЂРєР° СЃРѕРµРґРёРЅРµРЅРёСЏ
+class TestWSAuth:
+ 
+    def test_invalid_token_closes_connection(self):
+        room_id = f"auth-{uuid.uuid4().hex[:8]}"
+        with pytest.raises(Exception):
+            # РЎРµСЂРІРµСЂ РґРѕР»Р¶РµРЅ РІРµСЂРЅСѓС‚СЊ 401 РёР»Рё Р·Р°РєСЂС‹С‚СЊ СЃРѕРµРґРёРЅРµРЅРёРµ
+            ws = websocket.create_connection(
+                f"{CHAT_URL}/ws/{room_id}?token=invalid_token",
+                timeout=5,
+            )
+            # Р•СЃР»Рё СЃРѕРµРґРёРЅРµРЅРёРµ РѕС‚РєСЂС‹Р»РѕСЃСЊ вЂ” С‡РёС‚Р°РµРј Рё РѕР¶РёРґР°РµРј Р·Р°РєСЂС‹С‚РёСЏ
+            ws.settimeout(3)
+            ws.recv()
+ 
+    def test_missing_token_closes_connection(self):
+        room_id = f"noauth-{uuid.uuid4().hex[:8]}"
+        with pytest.raises(Exception):
+            ws = websocket.create_connection(
+                f"{CHAT_URL}/ws/{room_id}",
+                timeout=5,
+            )
+            ws.settimeout(3)
+            ws.recv()
+
+#РµСЃС‚СЊ Р»Рё РёСЃС‚РѕСЂРёСЏ С‡Р°С‚РѕРІ
+class TestHistory:
+ 
+    def test_message_appears_in_http_history(self):
+        u = register_and_login()
+        room_id = f"hist-{uuid.uuid4().hex[:8]}"
+        token = ws_token(u)
+ 
+        ws = connect(room_id, token)
+        drain_history(ws)
+ 
+        text = f"hist-msg-{uuid.uuid4().hex[:6]}"
+        ws.send(json.dumps({"text": text}))
+ 
+        # Р–РґС‘Рј С‡С‚РѕР±С‹ Redis СѓСЃРїРµР» СЃРѕС…СЂР°РЅРёС‚СЊ
+        ws.settimeout(2)
+        try: ws.recv()
+        except: pass
+        ws.close()
+ 
+        time.sleep(0.3)  # РЅРµР±РѕР»СЊС€Р°СЏ РїР°СѓР·Р° РґР»СЏ async-СЃРѕС…СЂР°РЅРµРЅРёСЏ
+ 
+        r = requests.get(
+            f"{CHAT_HTTP}/history/{room_id}",
+            params={"token": token},
+            timeout=5,
+        )
+        assert r.status_code == 200
+        history = r.json()
+        assert isinstance(history, list)
+        assert any(m["text"] == text for m in history), \
+            f"РЎРѕРѕР±С‰РµРЅРёРµ '{text}' РЅРµ РЅР°Р№РґРµРЅРѕ РІ РёСЃС‚РѕСЂРёРё: {history}"
+ 
+    def test_history_endpoint_requires_auth(self):
+        r = requests.get(f"{CHAT_HTTP}/history/some-room", timeout=5)
+        assert r.status_code == 401
+ 
+    def test_history_returned_on_ws_connect(self):
+        """РџСЂРё РїРµСЂРµРїРѕРґРєР»СЋС‡РµРЅРёРё Рє РєРѕРјРЅР°С‚Рµ РёСЃС‚РѕСЂРёСЏ РїСЂРёС…РѕРґРёС‚ СЃСЂР°Р·Сѓ."""
+        u = register_and_login()
+        room_id = f"reconnect-{uuid.uuid4().hex[:8]}"
+        token = ws_token(u)
+ 
+        # РЁР°Рі 1: РѕС‚РїСЂР°РІР»СЏРµРј СЃРѕРѕР±С‰РµРЅРёРµ
+        ws1 = connect(room_id, token)
+        drain_history(ws1)
+        text = f"pre-{uuid.uuid4().hex[:6]}"
+        ws1.send(json.dumps({"text": text}))
+        time.sleep(0.5)
+        ws1.close()
+ 
+        # РЁР°Рі 2: РЅРѕРІРѕРµ РїРѕРґРєР»СЋС‡РµРЅРёРµ вЂ” РґРѕР»Р¶РЅС‹ РїРѕР»СѓС‡РёС‚СЊ РёСЃС‚РѕСЂРёСЋ
+        ws2 = connect(room_id, token)
+        history = drain_history(ws2, timeout=3.0)
+        ws2.close()
+ 
+        texts = [m["text"] for m in history]
+        assert text in texts, f"РЎРѕРѕР±С‰РµРЅРёРµ '{text}' РЅРµ РїСЂРёС€Р»Рѕ РІ РёСЃС‚РѕСЂРёРё РїСЂРё reconnect: {texts}"
+ 
+    def test_history_order_newest_first(self):
+        """РСЃС‚РѕСЂРёСЏ С‡РµСЂРµР· HTTP РѕС‚РґР°С‘С‚СЃСЏ РѕС‚ РЅРѕРІС‹С… Рє СЃС‚Р°СЂС‹Рј (LPUSH РІ Redis)."""
+        u = register_and_login()
+        room_id = f"order-{uuid.uuid4().hex[:8]}"
+        token = ws_token(u)
+ 
+        ws = connect(room_id, token)
+        drain_history(ws)
+ 
+        for i in range(3):
+            ws.send(json.dumps({"text": f"msg-{i}"}))
+            time.sleep(0.1)
+ 
+        time.sleep(0.5)
+        ws.close()
+ 
+        r = requests.get(
+            f"{CHAT_HTTP}/history/{room_id}",
+            params={"token": token},
+            timeout=5,
+        )
+        history = r.json()
+        assert len(history) >= 3
+        # РџРµСЂРІС‹Р№ СЌР»РµРјРµРЅС‚ вЂ” СЃР°РјС‹Р№ РЅРѕРІС‹Р№ (msg-2)
+        assert history[0]["text"] == "msg-2"
+ 
+    def test_history_limit_param(self):
+        u = register_and_login()
+        room_id = f"limit-{uuid.uuid4().hex[:8]}"
+        token = ws_token(u)
+ 
+        ws = connect(room_id, token)
+        drain_history(ws)
+ 
+        for i in range(5):
+            ws.send(json.dumps({"text": f"lim-{i}"}))
+            time.sleep(0.05)
+ 
+        time.sleep(0.5)
+        ws.close()
+ 
+        r = requests.get(
+            f"{CHAT_HTTP}/history/{room_id}",
+            params={"token": token, "limit": 2},
+            timeout=5,
+        )
+        assert r.status_code == 200
+        assert len(r.json()) <= 2
+ 
+#СЃС‚СЂРµСЃСЃ С‚РµСЃС‚
+class TestConcurrency:
+ 
+    def test_multiple_users_same_room(self):
+        """5 РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№ РІ РѕРґРЅРѕР№ РєРѕРјРЅР°С‚Рµ вЂ” РІСЃРµ РїРѕР»СѓС‡Р°СЋС‚ СЃРѕРѕР±С‰РµРЅРёСЏ РґСЂСѓРі РґСЂСѓРіР°."""
+        users = [register_and_login() for _ in range(5)]
+        room_id = f"multi-{uuid.uuid4().hex[:8]}"
+ 
+        connections = [connect(room_id, ws_token(u)) for u in users]
+        for ws in connections: drain_history(ws)
+ 
+        sender_ws = connections[0]
+        text = f"broadcast-{uuid.uuid4().hex[:6]}"
+        sender_ws.send(json.dumps({"text": text}))
+ 
+        for ws in connections:
+            ws.settimeout(5)
+            msg = json.loads(ws.recv())
+            assert msg["text"] == text
+ 
+        for ws in connections:
+            ws.close()
+ 
+
+===== C:\Users\User\Desktop\project\StudHub-Project\tests\test_grades.py =====
+
+import io
+import pytest
+import requests
+from conftest import BASE_URL, register_and_login, make_user_payload
+ 
+#СЃРѕР·РґР°РЅРµ РѕС†РµРЅРѕРє
+def _get_csrf(session: requests.Session) -> str | None:
+    """РџРѕР»СѓС‡Р°РµРј CSRF-С‚РѕРєРµРЅ РёР· РєСѓРєРё Spring РїРѕСЃР»Рµ Р»СЋР±РѕРіРѕ GET-Р·Р°РїСЂРѕСЃР°."""
+    session.get(f"{BASE_URL}/api/user", timeout=10)
+    return session.cookies.get("XSRF-TOKEN")
+ 
+#РїСЂРѕСЃРјРѕС‚СЂ РѕС†РµРЅРѕРє
+class TestGetGrades:
+ 
+    def test_student_gets_own_grades_200(self, student):
+        r = student["session"].get(f"{BASE_URL}/api/grades", timeout=10)
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+ 
+    def test_unauthenticated_get_grades_401(self):
+        r = requests.get(f"{BASE_URL}/api/grades", timeout=10)
+        assert r.status_code == 401
+ 
+    def test_teacher_requires_group_param(self, teacher):
+        """Teacher Р±РµР· group в†’ 400."""
+        r = teacher["session"].get(f"{BASE_URL}/api/grades", timeout=10)
+        assert r.status_code == 400
+ 
+    def test_teacher_with_group_param_200(self, teacher):
+        r = teacher["session"].get(
+            f"{BASE_URL}/api/grades",
+            params={"group": "РџР-2025"},
+            timeout=10,
+        )
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+ 
+    def test_teacher_filter_by_subject(self, teacher):
+        r = teacher["session"].get(
+            f"{BASE_URL}/api/grades",
+            params={"group": "РџР-2025", "subject": "РњР°С‚РµРјР°С‚РёРєР°"},
+            timeout=10,
+        )
+        assert r.status_code == 200
+        body = r.json()
+        # Р•СЃР»Рё РѕС†РµРЅРѕРє РЅРµС‚ вЂ” РїСѓСЃС‚РѕР№ СЃРїРёСЃРѕРє, РЅРµ РѕС€РёР±РєР°
+        assert isinstance(body, list)
+        for g in body:
+            assert g.get("subject") == "РњР°С‚РµРјР°С‚РёРєР°"
+ 
+    def test_admin_with_group_param_200(self, admin):
+        r = admin["session"].get(
+            f"{BASE_URL}/api/grades",
+            params={"group": "РџР-2025"},
+            timeout=10,
+        )
+        assert r.status_code == 200
+ 
+#РѕР±РЅРѕРІР»РµРЅРёРµ РѕС†РµРЅРѕРє
+class TestUpdateGrade:
+ 
+    def _create_grade_via_upload(self, uploader_session: requests.Session, student_email: str) -> int | None:
+        """
+        Р“РµРЅРµСЂРёСЂСѓРµС‚ РјРёРЅРёРјР°Р»СЊРЅС‹Р№ CSV-РїРѕРґРѕР±РЅС‹Р№ xlsx РІ РїР°РјСЏС‚Рё Рё Р·Р°РіСЂСѓР¶Р°РµС‚ С‡РµСЂРµР· /api/grades/upload.
+        Р’РѕР·РІСЂР°С‰Р°РµС‚ id РїРµСЂРІРѕР№ СЃРѕР·РґР°РЅРЅРѕР№ РѕС†РµРЅРєРё РёР»Рё None РµСЃР»Рё upload РЅРµ РїРѕРґРґРµСЂР¶РёРІР°РµС‚СЃСЏ/РїСЂРѕРІР°Р»РёР»СЃСЏ.
+        
+        Р РµР°Р»СЊРЅС‹Р№ xlsx СЃРѕР·РґР°С‘С‚СЃСЏ С‡РµСЂРµР· openpyxl; РµСЃР»Рё Р±РёР±Р»РёРѕС‚РµРєР° РЅРµ СѓСЃС‚Р°РЅРѕРІР»РµРЅР° вЂ” РїСЂРѕРїСѓСЃРєР°РµРј.
+        """
+        try:
+            import openpyxl
+        except ImportError:
+            return None
+ 
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["student_email", "subject", "grade", "date"])
+        ws.append([student_email, "Р¤РёР·РёРєР°", "5", "2025-01-15"])
+ 
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+ 
+        csrf = _get_csrf(uploader_session)
+        files = {"file": ("grades.xlsx", buf, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+        headers = {"X-XSRF-TOKEN": csrf} if csrf else {}
+        r = uploader_session.post(
+            f"{BASE_URL}/api/grades/upload",
+            files=files,
+            headers=headers,
+            timeout=30,
+        )
+        if r.status_code != 200:
+            return None
+ 
+        # РџРѕР»СѓС‡Р°РµРј id С‡РµСЂРµР· GET РѕС†РµРЅРѕРє СЃС‚СѓРґРµРЅС‚Р° (РµСЃР»Рё РµСЃС‚СЊ СЃРµСЃСЃРёСЏ СЃС‚СѓРґРµРЅС‚Р°)
+        return r.json().get("processed", 0)
+ 
+    def test_patch_nonexistent_grade_404(self, teacher):
+        sess = teacher["session"]
+        csrf = _get_csrf(sess)
+        r = sess.patch(
+            f"{BASE_URL}/api/grades/999999999",
+            json={"grade": "5"},
+            headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+            timeout=10,
+        )
+        assert r.status_code == 404
+ 
+    def test_student_cannot_patch_grade(self, student):
+        sess = student["session"]
+        csrf = _get_csrf(sess)
+        r = sess.patch(
+            f"{BASE_URL}/api/grades/1",
+            json={"grade": "5"},
+            headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+            timeout=10,
+        )
+        # СЃС‚СѓРґРµРЅС‚ РїРѕР»СѓС‡Р°РµС‚ 403 РёР»Рё 404
+        assert r.status_code in (403, 404)
+ 
+    def test_unauthenticated_cannot_patch(self):
+        r = requests.patch(f"{BASE_URL}/api/grades/1", json={"grade": "5"}, timeout=10)
+        assert r.status_code == 401
+ 
+    @pytest.mark.integration
+    def test_teacher_can_upload_and_update_grade(self, teacher, student):
+        """
+        РРЅС‚РµРіСЂР°С†РёРѕРЅРЅС‹Р№ С‚РµСЃС‚: Р·Р°РіСЂСѓР¶Р°РµРј РѕС†РµРЅРєСѓ, РїРѕС‚РѕРј РѕР±РЅРѕРІР»СЏРµРј С‡РµСЂРµР· PATCH.
+        РўСЂРµР±СѓРµС‚ openpyxl: pip install openpyxl
+        """
+        pytest.importorskip("openpyxl")
+        import openpyxl
+ 
+        #upload
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["student_email", "subject", "grade", "date"])
+        ws.append([student["email"], "РҐРёРјРёСЏ", "3", "2025-03-10"])
+        buf = io.BytesIO()
+        wb.save(buf); buf.seek(0)
+ 
+        csrf = _get_csrf(teacher["session"])
+        upload_r = teacher["session"].post(
+            f"{BASE_URL}/api/grades/upload",
+            files={"file": ("g.xlsx", buf, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+            timeout=30,
+        )
+        assert upload_r.status_code == 200, f"Upload failed: {upload_r.text}"
+        assert upload_r.json()["processed"] >= 1
+ 
+        #РЅР°Р№С‚Рё grade_id С‡РµСЂРµР· GET СЃС‚СѓРґРµРЅС‚Р°
+        grades_r = student["session"].get(f"{BASE_URL}/api/grades", timeout=10)
+        assert grades_r.status_code == 200
+        grades = grades_r.json()
+        target = next((g for g in grades if g["subject"] == "РҐРёРјРёСЏ"), None)
+        assert target is not None, "РћС†РµРЅРєР° РїРѕ РҐРёРјРёРё РЅРµ РЅР°Р№РґРµРЅР° РїРѕСЃР»Рµ upload"
+ 
+        grade_id = target["id"]
+ 
+        #PATCH
+        csrf = _get_csrf(teacher["session"])
+        patch_r = teacher["session"].patch(
+            f"{BASE_URL}/api/grades/{grade_id}",
+            json={"grade": "5"},
+            headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+            timeout=10,
+        )
+        assert patch_r.status_code == 200
+        assert patch_r.json()["grade"] == "5"
+ 
+        #РїСЂРѕРІРµСЂСЏРµРј С‡С‚Рѕ СЃС‚СѓРґРµРЅС‚ РІРёРґРёС‚ РѕР±РЅРѕРІР»С‘РЅРЅСѓСЋ РѕС†РµРЅРєСѓ
+        grades_after = student["session"].get(f"{BASE_URL}/api/grades", timeout=10).json()
+        updated = next((g for g in grades_after if g["id"] == grade_id), None)
+        assert updated["grade"] == "5"
+ 
+#РѕС‚РїСЂР°РІРєР° РѕС†РµРЅРѕРє
+class TestUploadGrades:
+ 
+    def test_student_cannot_upload_grades(self, student):
+        pytest.importorskip("openpyxl")
+        import openpyxl
+ 
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["student_email", "subject", "grade", "date"])
+        ws.append([student["email"], "Р¤РёР·РёРєР°", "4", "2025-02-01"])
+        buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+ 
+        csrf = _get_csrf(student["session"])
+        r = student["session"].post(
+            f"{BASE_URL}/api/grades/upload",
+            files={"file": ("g.xlsx", buf, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+            timeout=20,
+        )
+        assert r.status_code == 403
+ 
+    def test_upload_empty_file_returns_400(self, teacher):
+        csrf = _get_csrf(teacher["session"])
+        r = teacher["session"].post(
+            f"{BASE_URL}/api/grades/upload",
+            files={"file": ("empty.xlsx", io.BytesIO(b""), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+            timeout=10,
+        )
+        assert r.status_code == 400
+ 
+    def test_upload_without_auth_returns_401(self):
+        pytest.importorskip("openpyxl")
+        import openpyxl
+ 
+        wb = openpyxl.Workbook()
+        wb.active.append(["student_email", "subject", "grade", "date"])
+        buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+ 
+        r = requests.post(
+            f"{BASE_URL}/api/grades/upload",
+            files={"file": ("g.xlsx", buf, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            timeout=10,
+        )
+        assert r.status_code == 401
+ 
+
+===== C:\Users\User\Desktop\project\StudHub-Project\tests\test_history.py =====
+
+import json
+import time
+import requests
+import websocket
+from conftest import BASE_URL, CHAT_URL, register_and_login
+
+CHAT_HTTP = CHAT_URL.replace("ws://", "http://").replace("wss://", "https://")
+
+
+def test_history():
+    user = register_and_login()
+    room_id = f"history-room-{user['id']}"
+    token = f"{user['id']}:{user['login']}"
+
+    ws = websocket.create_connection(
+        f"{CHAT_URL}/ws/{room_id}?token={token}",
+        timeout=5,
+    )
+
+    #РїСЂРѕРІРµСЂРєР° РёСЃС‚РѕСЂРёРё
+    ws.settimeout(2)
+    while True:
+        try:
+            ws.recv()
+        except websocket.WebSocketTimeoutException:
+            break
+
+    ws.settimeout(5)
+    ws.send(json.dumps({"text": "history_test_message"}))
+
+    try:
+        ws.recv()
+    except Exception:
+        pass
+
+    time.sleep(0.3)
+    ws.close()
+
+    response = requests.get(
+        f"{CHAT_HTTP}/history/{room_id}",
+        params={"token": token},
+        timeout=5,
+    )
+    assert response.status_code == 200
+    history = response.json()
+    assert any(msg["text"] == "history_test_message" for msg in history)
+
+===== C:\Users\User\Desktop\project\StudHub-Project\tests\test_schedule.py =====
+
+import json
+import uuid
+import pytest
+import requests
+from conftest import BASE_URL
+ 
+ 
+def _csrf(session: requests.Session) -> str | None:
+    session.get(f"{BASE_URL}/api/user", timeout=10)
+    return session.cookies.get("XSRF-TOKEN")
+ 
+ 
+def _sample_schedule_json() -> dict:
+    """РњРёРЅРёРјР°Р»СЊРЅР°СЏ СЃС‚СЂСѓРєС‚СѓСЂР° СЂР°СЃРїРёСЃР°РЅРёСЏ РґР»СЏ С‚РµСЃС‚РѕРІ."""
+    return {
+        "fileName": f"test_schedule_{uuid.uuid4().hex[:6]}.xlsx",
+        "weeks": [
+            {
+                "week": 1,
+                "days": [
+                    {
+                        "day": "РџРѕРЅРµРґРµР»СЊРЅРёРє",
+                        "lessons": [
+                            {"time": "08:00", "subject": "РњР°С‚РµРјР°С‚РёРєР°", "teacher": "РРІР°РЅРѕРІ Р.Р.", "room": "101"}
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+ 
+# GET /api/schedule/latest
+class TestGetSchedule:
+ 
+    def test_authenticated_user_can_get_schedule(self, student):
+        r = student["session"].get(f"{BASE_URL}/api/schedule/latest", timeout=10)
+        # 200 (РµСЃС‚СЊ СЂР°СЃРїРёСЃР°РЅРёРµ) РёР»Рё 200 СЃ СЃРѕРѕР±С‰РµРЅРёРµРј "Р Р°СЃРїРёСЃР°РЅРёРµ РµС‰Рµ РЅРµ Р·Р°РіСЂСѓР¶РµРЅРѕ"
+        assert r.status_code == 200
+ 
+    def test_unauthenticated_returns_401(self):
+        r = requests.get(f"{BASE_URL}/api/schedule/latest", timeout=10)
+        assert r.status_code == 401
+ 
+    def test_response_is_json(self, student):
+        r = student["session"].get(f"{BASE_URL}/api/schedule/latest", timeout=10)
+        assert r.headers.get("Content-Type", "").startswith("application/json")
+        # РґРѕР»Р¶РµРЅ РїР°СЂСЃРёС‚СЊСЃСЏ Р±РµР· РѕС€РёР±РєРё
+        _ = r.json()
+
+# POST /api/schedule/upload  (С‡РµСЂРµР· Java в†’ C++)
+class TestUploadSchedule:
+ 
+    def test_admin_can_upload_schedule(self, admin):
+        sess = admin["session"]
+        csrf = _csrf(sess)
+        schedule = _sample_schedule_json()
+ 
+        r = sess.post(
+            f"{BASE_URL}/api/schedule/upload-json",
+            json={
+                "file_name":     schedule["fileName"],
+                "file_type":     "xlsx",
+                "uploaded_by":   admin["login"],
+                "schedule_json": schedule,
+            },
+            headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+            timeout=30,
+        )
+        assert r.status_code == 200, f"Upload РїСЂРѕРІР°Р»РёР»СЃСЏ: {r.text}"
+        body = r.json()
+        assert body.get("status") == "ok"
+        assert "id" in body
+ 
+    def test_admin_upload_appears_in_latest(self, admin):
+        sess = admin["session"]
+        csrf = _csrf(sess)
+        schedule = _sample_schedule_json()
+        unique_name = schedule["fileName"]
+ 
+        sess.post(
+            f"{BASE_URL}/api/schedule/upload-json",
+            json={
+                "file_name":     unique_name,
+                "file_type":     "xlsx",
+                "uploaded_by":   admin["login"],
+                "schedule_json": schedule,
+            },
+            headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+            timeout=30,
+        )
+ 
+        r = sess.get(f"{BASE_URL}/api/schedule/latest", timeout=10)
+        assert r.status_code == 200
+        # РњРѕР¶РµС‚ Р±С‹С‚СЊ Р±РѕР»РµРµ СЃРІРµР¶РµРµ СЂР°СЃРїРёСЃР°РЅРёРµ РѕС‚ РґСЂСѓРіРѕРіРѕ С‚РµСЃС‚Р°, РЅРѕ РїРѕР»Рµ schedule РґРѕР»Р¶РЅРѕ Р±С‹С‚СЊ
+        body = r.json()
+        assert "schedule" in body or "message" in body
+ 
+    def test_student_cannot_upload_schedule(self, student):
+        sess = student["session"]
+        csrf = _csrf(sess)
+ 
+        r = sess.post(
+            f"{BASE_URL}/api/schedule/upload-json",
+            json={
+                "file_name":     "test.xlsx",
+                "file_type":     "xlsx",
+                "uploaded_by":   student["login"],
+                "schedule_json": _sample_schedule_json(),
+            },
+            headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+            timeout=10,
+        )
+        assert r.status_code in (401, 403)
+ 
+    def test_unauthenticated_cannot_upload(self):
+        r = requests.post(
+            f"{BASE_URL}/api/schedule/upload-json",
+            json={
+                "file_name":     "test.xlsx",
+                "file_type":     "xlsx",
+                "uploaded_by":   "anon",
+                "schedule_json": _sample_schedule_json(),
+            },
+            timeout=10,
+        )
+        assert r.status_code in (401, 403)
+ 
+    def test_upload_missing_fields_returns_4xx(self, admin):
+        sess = admin["session"]
+        csrf = _csrf(sess)
+ 
+        r = sess.post(
+            f"{BASE_URL}/api/schedule/upload-json",
+            json={"file_name": "test.xlsx"},   # РЅРµС‚ file_type, uploaded_by, schedule_json
+            headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+            timeout=10,
+        )
+        assert r.status_code in (400, 422, 500)
+ 
+    def test_repeated_upload_same_filename_replaces(self, admin):
+        """РџРѕРІС‚РѕСЂРЅР°СЏ Р·Р°РіСЂСѓР·РєР° СЃ С‚РµРј Р¶Рµ РёРјРµРЅРµРј С„Р°Р№Р»Р° РґРѕР»Р¶РЅР° Р·Р°РјРµРЅРёС‚СЊ Р·Р°РїРёСЃСЊ (replaced=true)."""
+        sess = admin["session"]
+        schedule = _sample_schedule_json()
+        schedule["fileName"] = f"repeated_{uuid.uuid4().hex[:6]}.xlsx"
+ 
+        def do_upload():
+            csrf = _csrf(sess)
+            return sess.post(
+                f"{BASE_URL}/api/schedule/upload-json",
+                json={
+                    "file_name":     schedule["fileName"],
+                    "file_type":     "xlsx",
+                    "uploaded_by":   admin["login"],
+                    "schedule_json": schedule,
+                },
+                headers={"X-XSRF-TOKEN": csrf} if csrf else {},
+                timeout=30,
+            )
+ 
+        r1 = do_upload()
+        assert r1.status_code == 200
+        r2 = do_upload()
+        assert r2.status_code == 200
+        # Р’С‚РѕСЂРѕР№ upload РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ replace, Р° РЅРµ insert
+        assert r2.json().get("replaced") is True
+
+
