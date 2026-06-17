@@ -22,7 +22,7 @@ interface Question {
 export default function MaterialEditPage() {
   const { courseId, materialId } = useParams();
   const navigate = useNavigate();
-  useAuth();
+  const { user } = useAuth();
 
   const [material, setMaterial] = useState<Material | null>(null);
   const [loading, setLoading] = useState(true);
