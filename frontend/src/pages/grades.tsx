@@ -191,7 +191,7 @@ export default function Grades() {
 
       const studentsMap = new Map<number, { id: number; firstName: string; lastName: string; group: string }>();
       const datesSet = new Set<string>();
-      const gradesMap: Record<number, Record<string, number>> = {};
+      const gradesMap: Record<number, Record<string, string | null>> = {};
 
       dateCols.forEach(d => datesSet.add(d.isoDate));
 
@@ -226,7 +226,7 @@ export default function Grades() {
         for (const { colIndex, isoDate } of dateCols) {
           const gradeVal = cellByIndex[colIndex];
           if (gradeVal !== null && gradeVal !== undefined) {
-            gradesMap[studentId][isoDate] = Number(gradeVal);
+            gradesMap[studentId][isoDate] = String(gradeVal);
           }
         }
       }
