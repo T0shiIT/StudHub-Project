@@ -36,7 +36,7 @@ export default function TestPassing() {
 
   const loadQuestions = async () => {
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}/questions`);
+      const res = await fetchWithCsrf(`/api/materials/${materialId}/questions`);
       if (res.ok) {
         const data = await res.json();
         setQuestions(data);
@@ -72,7 +72,7 @@ export default function TestPassing() {
   const submitTest = async () => {
     setSubmitting(true);
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}/submit-test`, {
+      const res = await fetchWithCsrf(`/api/materials/${materialId}/submit-test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(answers),

@@ -54,7 +54,7 @@ export default function Register() {
 
     setSubmitting(true);
     try {
-      const response = await fetchWithCsrf('http://localhost:8080/api/auth/register', {
+      const response = await fetchWithCsrf('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

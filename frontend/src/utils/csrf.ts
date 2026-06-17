@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:8080';
+const API_BASE = '';
 
 export function getCsrfToken(): string | null {
   const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);

@@ -12,11 +12,11 @@ export default function Header() {
   const handleLogout = async () => {
     localStorage.removeItem('isAuthenticated');
     try {
-      await fetchWithCsrf('http://localhost:8080/logout', { method: 'POST' });
+      await fetchWithCsrf('/logout', { method: 'POST' });
     } catch (e) {
       console.error('Logout error', e);
     }
-    window.location.href = 'http://localhost:5173';
+    window.location.href = '/';
   };
 
   return (

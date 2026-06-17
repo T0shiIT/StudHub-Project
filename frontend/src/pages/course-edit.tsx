@@ -28,7 +28,7 @@ export default function CourseEditPage() {
   useEffect(() => {
     const loadCourse = async () => {
       try {
-        const res = await fetchWithCsrf(`http://localhost:8080/api/courses/${id}`);
+        const res = await fetchWithCsrf(`/api/courses/${id}`);
         if (res.ok) {
           const data = await res.json();
           setCourse(data);
@@ -60,7 +60,7 @@ export default function CourseEditPage() {
     setSaving(true);
 
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/courses/${id}`, {
+      const res = await fetchWithCsrf(`/api/courses/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, description, coverImage, status }),
@@ -82,7 +82,7 @@ export default function CourseEditPage() {
     if (!confirm(`Вы уверены, что хотите удалить курс "${course?.title}"?`)) return;
 
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/courses/${id}`, {
+      const res = await fetchWithCsrf(`/api/courses/${id}`, {
         method: 'DELETE',
       });
 

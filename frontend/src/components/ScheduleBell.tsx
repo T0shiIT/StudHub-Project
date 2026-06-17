@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { fetchWithCsrf } from '../utils/csrf';
 import type { Notification, NotificationsResponse } from '../types/notification';
 
-const API_NOTIFICATIONS_URL = 'http://localhost:8080/api/notifications';
+const API_NOTIFICATIONS_URL = '/api/notifications';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000; // 7 дней в миллисекундах
 
 export const ScheduleBell = () => {

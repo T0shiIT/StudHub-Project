@@ -21,7 +21,7 @@ export default function TestResult() {
     // Иначе загружаем с сервера
     const fetchResult = async () => {
       try {
-        const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}/test-result`);
+        const res = await fetchWithCsrf(`/api/materials/${materialId}/test-result`);
         if (res.ok) {
           const data = await res.json();
           if (data.completed) {

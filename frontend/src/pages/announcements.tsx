@@ -44,7 +44,7 @@ export default function Announcements() {
     const loadPosts = async () => {
       try {
         await ensureCsrfToken();
-        const response = await fetchWithCsrf('http://localhost:8080/api/announcements', { 
+        const response = await fetchWithCsrf('/api/announcements', { 
           method: 'GET' 
         });
         
@@ -89,7 +89,7 @@ export default function Announcements() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetchWithCsrf('http://localhost:8080/api/announcements', {
+      const response = await fetchWithCsrf('/api/announcements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -135,7 +135,7 @@ export default function Announcements() {
     if (!window.confirm('Вы уверены, что хотите удалить это объявление?')) return;
     
     try {
-      const response = await fetchWithCsrf(`http://localhost:8080/api/announcements/${postId}`, {
+      const response = await fetchWithCsrf(`/api/announcements/${postId}`, {
         method: 'DELETE',
       });
 

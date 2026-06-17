@@ -28,7 +28,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshUser = async () => {
     try {
       await ensureCsrfToken();
-      const response = await fetchWithCsrf('http://localhost:8080/api/user/me');
+      const response = await fetchWithCsrf('/api/user/me');
       if (response.ok) {
         const data = await response.json();
         if (data && !data.error) {

@@ -35,7 +35,7 @@ export default function CoursesPage() {
   // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
   const fetchTeacherName = async (teacherId: number): Promise<string> => {
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/internal/user/${teacherId}`);
+      const res = await fetchWithCsrf(`/api/internal/user/${teacherId}`);
       if (res.ok) {
         const data = await res.json();
         return `${data.firstName} ${data.lastName}`;
@@ -49,7 +49,7 @@ export default function CoursesPage() {
   const loadCourses = async () => {
     setLoadingCourses(true);
     try {
-      const res = await fetchWithCsrf('http://localhost:8080/api/courses');
+      const res = await fetchWithCsrf('/api/courses');
       if (!res.ok) throw new Error('Failed to fetch courses');
       let coursesData: Course[] = await res.json();
 
@@ -85,7 +85,7 @@ export default function CoursesPage() {
 
             if (canViewProgress) {
               try {
-                const progRes = await fetchWithCsrf(`http://localhost:8080/api/courses/${course.id}/progress`);
+                const progRes = await fetchWithCsrf(`/api/courses/${course.id}/progress`);
                 if (progRes.ok) {
                   const progData = await progRes.json();
                   return {
@@ -120,7 +120,7 @@ export default function CoursesPage() {
     }
     setCreating(true);
     try {
-      const res = await fetchWithCsrf('http://localhost:8080/api/courses', {
+      const res = await fetchWithCsrf('/api/courses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -146,7 +146,7 @@ export default function CoursesPage() {
     if (!user) return;
     setEnrollingId(courseId);
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/courses/${courseId}/enroll`, {
+      const res = await fetchWithCsrf(`/api/courses/${courseId}/enroll`, {
         method: 'POST',
       });
       if (res.ok || (res.status === 400 && (await res.clone().text()).includes('Уже записан'))) {

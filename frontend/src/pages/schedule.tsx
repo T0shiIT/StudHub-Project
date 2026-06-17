@@ -22,7 +22,7 @@ import {
 } from '../utils/scheduleParser';
 import { useAuth } from '../context/AuthContext';
 
-const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = '';
 const SCHEDULE_UPLOAD_URL = `${API_BASE_URL}/api/schedule/upload`;
 const SCHEDULE_UPLOADS_URL = `${API_BASE_URL}/api/schedule/uploads`;
 const SUPPORTED_EXCEL_EXTENSIONS = '.xlsx,.xls,.xlsm,.xlsb';

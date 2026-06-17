@@ -33,7 +33,7 @@ export default function Login() {
     }
     setSubmitting(true);
     try {
-      const res = await fetchWithCsrf('http://localhost:8080/api/auth/login', {
+      const res = await fetchWithCsrf('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -58,7 +58,7 @@ export default function Login() {
   };
 
   const handleYandexLogin = () => {
-    window.location.href = 'http://localhost:8080/oauth2/authorization/yandex';
+    window.location.href = '/oauth2/authorization/yandex';
   };
 
   const handleVkLogin = () => {

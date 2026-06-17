@@ -32,7 +32,7 @@ export default function MaterialDetailPage() {
   const loadMaterial = async () => {
     setLoading(true);
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}`);
+      const res = await fetchWithCsrf(`/api/materials/${materialId}`);
       if (res.ok) {
         const data = await res.json();
         setMaterial(data);
@@ -54,7 +54,7 @@ export default function MaterialDetailPage() {
 
   const checkSubmissionStatus = async (materialId: number) => {
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}/status`);
+      const res = await fetchWithCsrf(`/api/materials/${materialId}/status`);
       if (res.ok) {
         const data = await res.json();
         setSubmitted(data.completed);
@@ -67,7 +67,7 @@ export default function MaterialDetailPage() {
 
   const checkTestResult = async (materialId: number) => {
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}/test-result`);
+      const res = await fetchWithCsrf(`/api/materials/${materialId}/test-result`);
       if (res.ok) {
         const data = await res.json();
         setTestCompleted(data.completed);
@@ -92,7 +92,7 @@ export default function MaterialDetailPage() {
       const formData = new FormData();
       formData.append('file', selectedFile);
 
-      const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}/submit`, {
+      const res = await fetchWithCsrf(`/api/materials/${materialId}/submit`, {
         method: 'POST',
         body: formData,
       });
@@ -177,7 +177,7 @@ export default function MaterialDetailPage() {
             <>
               {material.filePath && (
                 <div style={{marginBottom:16}}>
-                  <a href={`http://localhost:8080/api/materials/download/${material.id}`} className="btn-secondary">
+                  <a href={`/api/materials/download/${material.id}`} className="btn-secondary">
                     📄 Скачать файл задания
                   </a>
                 </div>
@@ -269,7 +269,7 @@ export default function MaterialDetailPage() {
 
           {material.materialType === 'FILE' && material.filePath && (
             <div style={{textAlign:'center', padding:16}}>
-              <a href={`http://localhost:8080/api/materials/download/${material.id}`} className="btn-primary">
+              <a href={`/api/materials/download/${material.id}`} className="btn-primary">
                 📄 Скачать файл
               </a>
             </div>

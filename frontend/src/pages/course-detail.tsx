@@ -63,7 +63,7 @@ export default function CourseDetailPage() {
   const loadSections = async () => {
     if (!id) return;
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/materials/course/${id}/sections`);
+      const res = await fetchWithCsrf(`/api/materials/course/${id}/sections`);
       if (!res.ok) return;
       const sectionsData = await res.json();
       setSections(sectionsData);
@@ -74,7 +74,7 @@ export default function CourseDetailPage() {
       await Promise.all(
         sectionsData.map(async (section: Section) => {
           try {
-            const materialsRes = await fetchWithCsrf(`http://localhost:8080/api/materials/section/${section.id}`);
+            const materialsRes = await fetchWithCsrf(`/api/materials/section/${section.id}`);
             if (materialsRes.ok) materialsMap[section.id] = await materialsRes.json();
             else materialsMap[section.id] = [];
           } catch (e) {
@@ -94,7 +94,7 @@ export default function CourseDetailPage() {
       return;
     }
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/courses/${id}`);
+      const res = await fetchWithCsrf(`/api/courses/${id}`);
       if (!res.ok) {
         navigate('/courses');
         return;
@@ -102,7 +102,7 @@ export default function CourseDetailPage() {
       const data = await res.json();
       let teacherName = 'Преподаватель';
       try {
-        const teacherRes = await fetchWithCsrf(`http://localhost:8080/api/internal/user/${data.teacherId}`);
+        const teacherRes = await fetchWithCsrf(`/api/internal/user/${data.teacherId}`);
         if (teacherRes.ok) {
           const teacherData = await teacherRes.json();
           teacherName = `${teacherData.firstName} ${teacherData.lastName}`;
@@ -127,7 +127,7 @@ export default function CourseDetailPage() {
   const loadProgress = async () => {
     if (!user || !course) return;
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/courses/${course.id}/progress`);
+      const res = await fetchWithCsrf(`/api/courses/${course.id}/progress`);
       if (res.ok) {
         const data = await res.json();
         setProgress({ percent: data.percent, hasGradedMaterials: data.hasGradedMaterials });
@@ -167,7 +167,7 @@ export default function CourseDetailPage() {
   const createSection = async () => {
     if (!newSectionTitle.trim()) return;
     try {
-      const res = await fetchWithCsrf('http://localhost:8080/api/materials/sections', {
+      const res = await fetchWithCsrf('/api/materials/sections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ courseId: Number(id), title: newSectionTitle }),
@@ -182,7 +182,7 @@ export default function CourseDetailPage() {
   const deleteSection = async (sectionId: number) => {
     if (!confirm('Удалить раздел и все материалы в нём?')) return;
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/materials/sections/${sectionId}`, { method: 'DELETE' });
+      const res = await fetchWithCsrf(`/api/materials/sections/${sectionId}`, { method: 'DELETE' });
       if (res.ok) await loadSections();
     } catch (error) { console.error(error); }
   };
@@ -219,7 +219,7 @@ export default function CourseDetailPage() {
   const createMaterial = async (sectionId: number) => {
     if (!newMaterial.title.trim()) { alert('Введите название материала'); return; }
     try {
-      const res = await fetchWithCsrf('http://localhost:8080/api/materials/material', {
+      const res = await fetchWithCsrf('/api/materials/material', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -236,7 +236,7 @@ export default function CourseDetailPage() {
 
       if (newMaterial.materialType === 'TEST' && testQuestions.length > 0) {
         for (const q of testQuestions) {
-          await fetchWithCsrf(`http://localhost:8080/api/materials/${createdMaterial.id}/questions`, {
+          await fetchWithCsrf(`/api/materials/${createdMaterial.id}/questions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text: q.text, options: q.options, correctOptionIndex: q.correctIndex }),
@@ -246,7 +246,7 @@ export default function CourseDetailPage() {
       } else if (selectedFile && (newMaterial.materialType === 'FILE' || newMaterial.materialType === 'ASSIGNMENT')) {
         const formData = new FormData();
         formData.append('file', selectedFile);
-        const uploadRes = await fetchWithCsrf(`http://localhost:8080/api/materials/material/${createdMaterial.id}/upload-file`, { method: 'POST', body: formData });
+        const uploadRes = await fetchWithCsrf(`/api/materials/material/${createdMaterial.id}/upload-file`, { method: 'POST', body: formData });
         if (!uploadRes.ok) alert(`Материал создан, но файл не загружен. Ошибка: ${await uploadRes.text()}`);
         else alert('Материал и файл успешно созданы');
       } else {
@@ -265,7 +265,7 @@ export default function CourseDetailPage() {
   const deleteMaterial = async (materialId: number) => {
     if (!confirm('Удалить материал?')) return;
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}`, { method: 'DELETE' });
+      const res = await fetchWithCsrf(`/api/materials/${materialId}`, { method: 'DELETE' });
       if (res.ok) {
         await loadSections();
         await loadProgress();
@@ -279,7 +279,7 @@ export default function CourseDetailPage() {
 
   const getSubmissionStatus = async (materialId: number): Promise<string> => {
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}/status`);
+      const res = await fetchWithCsrf(`/api/materials/${materialId}/status`);
       if (res.ok) { const data = await res.json(); return data.status; }
     } catch (error) { console.error('Failed to load status', error); }
     return 'Надо сделать';

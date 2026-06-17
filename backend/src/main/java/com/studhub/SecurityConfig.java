@@ -1,6 +1,7 @@
 package com.studhub;
 
 import com.studhub.auth.OAuth2LoginSuccessHandler;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -29,7 +30,8 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            SecurityContextRepository securityContextRepository,
-                                           OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler) throws Exception {
+                                           OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler,
+                                           @Value("${frontend.url:https://45.146.165.184.sslip.io}") String frontendUrl) throws Exception {
 
         CsrfTokenRequestAttributeHandler csrfHandler = new CsrfTokenRequestAttributeHandler();
         csrfHandler.setCsrfRequestAttributeName(null);
@@ -96,7 +98,7 @@ public class SecurityConfig {
                 .oauth2Login(oauth2 -> oauth2.successHandler(oAuth2LoginSuccessHandler))
                 .logout(logout -> logout
                         .logoutUrl("/logout")
-                        .logoutSuccessUrl("http://localhost:5173")
+                        .logoutSuccessUrl(frontendUrl)
                         .permitAll()
                 );
 
@@ -107,9 +109,18 @@ public class SecurityConfig {
     @Bean public SecurityContextRepository securityContextRepository() { return new HttpSessionSecurityContextRepository(); }
 
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${frontend.url:https://45.146.165.184.sslip.io}") String frontendUrl,
+            @Value("${app.backend.url:https://45.146.165.184.sslip.io}") String backendUrl) {
         CorsConfiguration cfg = new CorsConfiguration();
-        cfg.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost"));
+        cfg.setAllowedOrigins(List.of(
+                frontendUrl,
+                backendUrl,
+                "https://45.146.165.184.sslip.io",
+                "http://localhost:5173",
+                "http://localhost:8080",
+                "http://localhost"
+        ));
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));
         cfg.setAllowCredentials(true);

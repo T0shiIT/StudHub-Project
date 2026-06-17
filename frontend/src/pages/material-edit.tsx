@@ -47,7 +47,7 @@ export default function MaterialEditPage() {
 
   const loadMaterial = async () => {
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}`);
+      const res = await fetchWithCsrf(`/api/materials/${materialId}`);
       if (res.ok) {
         const data = await res.json();
         setMaterial(data);
@@ -71,7 +71,7 @@ export default function MaterialEditPage() {
 
   const loadQuestions = async () => {
     try {
-      const res = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}/questions`);
+      const res = await fetchWithCsrf(`/api/materials/${materialId}/questions`);
       if (res.ok) {
         const data = await res.json();
         const qs: Question[] = data.map((q: any) => {
@@ -99,7 +99,7 @@ export default function MaterialEditPage() {
     }
     setSaving(true);
     try {
-      const metaRes = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}`, {
+      const metaRes = await fetchWithCsrf(`/api/materials/${materialId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -131,7 +131,7 @@ export default function MaterialEditPage() {
         }));
 
         const questionsRes = await fetchWithCsrf(
-          `http://localhost:8080/api/materials/${materialId}/questions`,
+          `/api/materials/${materialId}/questions`,
           {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -144,7 +144,7 @@ export default function MaterialEditPage() {
       if (selectedFile && (material?.materialType === 'FILE' || material?.materialType === 'ASSIGNMENT')) {
         const formData = new FormData();
         formData.append('file', selectedFile);
-        const fileRes = await fetchWithCsrf(`http://localhost:8080/api/materials/${materialId}/replace-file`, {
+        const fileRes = await fetchWithCsrf(`/api/materials/${materialId}/replace-file`, {
           method: 'POST',
           body: formData
         });
