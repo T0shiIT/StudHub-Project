@@ -12,13 +12,9 @@ import {
   formatWeekType,
   EMPTY_CELL,
   toScheduleData,
-  isScheduleData,
   normalizeGroupName,
   type ScheduleData,
   type WeekType,
-  type GroupOption,
-  type DaySchedule,
-  type LessonCard,
 } from '../utils/scheduleParser';
 import { useAuth } from '../context/AuthContext';
 
@@ -27,7 +23,6 @@ const SCHEDULE_UPLOAD_URL = `${API_BASE_URL}/api/schedule/upload`;
 const SCHEDULE_UPLOADS_URL = `${API_BASE_URL}/api/schedule/uploads`;
 const SUPPORTED_EXCEL_EXTENSIONS = '.xlsx,.xls,.xlsm,.xlsb';
 const UNKNOWN_ERROR_MESSAGE = 'Неизвестная ошибка';
-const INVALID_SCHEDULE_RESPONSE_MESSAGE = 'Ответ сервера не содержит корректное расписание';
 const EMPTY_SCHEDULE_SELECT_VALUE = '';
 const SEARCH_LOCALE = 'ru-RU';
 const SCHEDULE_SEARCH_PLACEHOLDER = 'Поиск по группе или дате';

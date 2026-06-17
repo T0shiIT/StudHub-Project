@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Link, useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { getAllGroups, updateUserGroup, getUserGroup } from '../api/groups';
 
 // Импортируем все аватары из папки assets/avatars/
@@ -136,7 +136,7 @@ export default function Profile() {
   const isYandex = (user as any)?.default_avatar_id;
   const fullName = (user as any)?.real_name || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Имя не указано';
   const email = (user as any)?.default_email || user?.email || user?.login;
-  const initials = fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  const initials = fullName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
 
   // Находим URL выбранного аватара
   const selectedAvatarUrl = AVATAR_LIST.find(a => a.name === selectedAvatar)?.url || null;

@@ -13,7 +13,6 @@ import {
   buildDaySchedules,
   toScheduleData,
   normalizeGroupName,
-  type ScheduleData,
   type WeekType,
   type DaySchedule,
 } from '../utils/scheduleParser';
