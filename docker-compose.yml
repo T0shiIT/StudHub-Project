@@ -34,12 +34,6 @@ services:
     restart: unless-stopped
     expose:
       - "8000"
-    # Если у вашего парсера есть /health эндпоинт, раскомментируйте:
-    # healthcheck:
-    #   test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-    #   interval: 10s
-    #   timeout: 5s
-    #   retries: 3
 
   backend:
     build: ./backend
@@ -53,8 +47,8 @@ services:
         condition: service_started
       parser:
         condition: service_started
-      redis:                          # <-- ДОБАВЛЕНО
-        condition: service_healthy    # <-- ДОБАВЛЕНО
+      redis:
+        condition: service_healthy 
     volumes:
       - ./uploads/schedules:/app/uploads/schedules:ro
       - ./uploads:/app/uploads
@@ -80,9 +74,9 @@ services:
       # Секрет для верификации JWT в Go — должен совпасть с CHAT_JWT_SECRET
       CHAT_JWT_SECRET: ${CHAT_JWT_SECRET:-changeme-shared-secret}
       
-      # Redis configuration            # <-- ДОБАВЛЕНО
-      SPRING_DATA_REDIS_HOST: redis   # <-- ДОБАВЛЕНО
-      SPRING_DATA_REDIS_PORT: 6379    # <-- ДОБАВЛЕНО
+      # Redis configuration
+      SPRING_DATA_REDIS_HOST: redis  
+      SPRING_DATA_REDIS_PORT: 6379   
 
   frontend:
     build: ./frontend
@@ -90,7 +84,7 @@ services:
     ports:
       - "5173:5173"
     depends_on:
-      - backend  # Просто ждем старта контейнера, без condition: service_healthy
+      - backend  #Просто ждем старта контейнера, без condition: service_healthy
 
   nginx:
     build: ./nginx
@@ -139,17 +133,3 @@ services:
 
 volumes:
   db_data:
-
-
-#   Проблема: Spring Boot 3.2 + Spring Security — эндпоинт GET /api/internal/chat-token возвращает 404, хотя контроллер скомпилирован и присутствует в JAR (InternalUserController.class есть в BOOT-INF/classes/com/studhub/).
-# Симптомы:
-
-# GET /api/internal/chat-token → 404 с пустым телом
-# Класс есть в JAR: docker exec ... unzip -l app.jar | grep InternalUser показывает файл
-# В логах Spring нет маппинга на /api/internal/**
-# При запросе без сессии Spring Security редиректит на Яндекс OAuth (это ожидаемо)
-# При запросе с валидным JSESSIONID — всё равно 404
-
-# Стек: Spring Boot 3.2.0, Spring Security, OAuth2 (Яндекс), PostgreSQL, Docker
-# Конфиг Security разрешает .requestMatchers("/api/internal/**").authenticated()
-# Вопрос: Почему Spring не регистрирует маппинги контроллера несмотря на то что класс скомпилирован и находится в правильном пакете com.studhub? Как это диагностировать и исправить?

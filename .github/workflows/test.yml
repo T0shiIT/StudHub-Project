@@ -49,21 +49,9 @@ jobs:
       - name: Build and start full stack
         run: docker compose up -d --build
  
-      #аналог sleep 
-      - name: Wait for Java backend
-        run: |
-          echo "Waiting for backend..."
-          for i in $(seq 1 10); do
-            if curl -sf http://localhost:8080/actuator/health > /dev/null 2>&1 || \
-               curl -sf http://localhost:8080/api/auth/login \
-                    -X POST -H "Content-Type: application/json" \
-                    -d '{}' -o /dev/null; then
-              echo "Backend is up (attempt $i)"
-              break
-            fi
-            echo "  attempt $i/10..."
-            sleep 5
-          done
+      #пробуем sleep
+      - name: Wait for services
+        run: sleep 10
  
       - name: Wait for Go messenger
         run: |
@@ -74,7 +62,7 @@ jobs:
               break
             fi
             echo "  attempt $i/3..."
-            sleep 3
+            sleep 2
           done
  
       #скрипт диагностики
