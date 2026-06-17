@@ -5,6 +5,7 @@ import com.studhub.user.User;
 import com.studhub.user.UserRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
@@ -35,7 +36,7 @@ public class CourseController {
 
     @GetMapping
     public List<Course> getCourses(Authentication auth) {
-        User currentUser = userRepository.findByEmail(auth.getName()).orElse(null);
+        User currentUser = resolveCurrentUser(auth);
         Long userId = (currentUser != null) ? currentUser.getId() : null;
 
         List<Course> allCourses = courseRepository.findAll();
@@ -65,7 +66,7 @@ public class CourseController {
 
     @GetMapping("/{id}")
     public ResponseEntity<?> getCourse(@PathVariable Long id, Authentication auth) {
-        User user = userRepository.findByEmail(auth.getName()).orElse(null);
+        User user = resolveCurrentUser(auth);
         Course course = courseRepository.findById(id).orElse(null);
         if (course == null) return ResponseEntity.notFound().build();
 
@@ -77,7 +78,7 @@ public class CourseController {
 
     @PostMapping
     public ResponseEntity<?> createCourse(@RequestBody Course course, Authentication auth) {
-        User user = userRepository.findByEmail(auth.getName()).orElseThrow();
+        User user = resolveCurrentUserOrThrow(auth);
         if (!"TEACHER".equals(user.getRole()) && !"ADMIN".equals(user.getRole())) {
             return ResponseEntity.status(403).build();
         }
@@ -89,7 +90,7 @@ public class CourseController {
     @PutMapping("/{id}")
     @Transactional
     public ResponseEntity<?> updateCourse(@PathVariable Long id, @RequestBody Map<String, String> updates, Authentication auth) {
-        User user = userRepository.findByEmail(auth.getName()).orElseThrow();
+        User user = resolveCurrentUserOrThrow(auth);
         Course course = courseRepository.findById(id).orElse(null);
         if (course == null) return ResponseEntity.notFound().build();
 
@@ -123,7 +124,7 @@ public class CourseController {
     @DeleteMapping("/{id}")
     @Transactional
     public ResponseEntity<?> deleteCourse(@PathVariable Long id, Authentication auth) {
-        User user = userRepository.findByEmail(auth.getName()).orElseThrow();
+        User user = resolveCurrentUserOrThrow(auth);
         Course course = courseRepository.findById(id).orElse(null);
         if (course == null) return ResponseEntity.notFound().build();
 
@@ -143,7 +144,7 @@ public class CourseController {
 
     @GetMapping("/{id}/enrollment-status")
     public ResponseEntity<Map<String, Object>> getEnrollmentStatus(@PathVariable Long id, Authentication auth) {
-        User user = userRepository.findByEmail(auth.getName()).orElseThrow();
+        User user = resolveCurrentUserOrThrow(auth);
         boolean enrolled = enrollmentRepository.existsByCourseIdAndUserId(id, user.getId());
         int studentsCount = enrollmentRepository.countByCourseId(id);
         return ResponseEntity.ok(Map.of("enrolled", enrolled, "studentsCount", studentsCount));
@@ -151,7 +152,7 @@ public class CourseController {
 
     @GetMapping("/{id}/progress")
     public ResponseEntity<CourseProgressDto> getCourseProgress(@PathVariable Long id, Authentication auth) {
-        User user = userRepository.findByEmail(auth.getName()).orElseThrow();
+        User user = resolveCurrentUserOrThrow(auth);
         CourseProgressDto progress = courseProgressService.getProgressForUser(id, user.getId(), user.getRole());
         return ResponseEntity.ok(progress);
     }
@@ -159,9 +160,7 @@ public class CourseController {
     @PostMapping("/{id}/enroll")
     @Transactional
     public ResponseEntity<?> enroll(@PathVariable Long id, Authentication auth) {
-        String email = auth.getName();
-        if (email == null) return ResponseEntity.status(401).body(Map.of("error", "Не авторизован"));
-        User user = userRepository.findByEmail(email).orElse(null);
+        User user = resolveCurrentUser(auth);
         if (user == null) return ResponseEntity.status(401).body(Map.of("error", "Пользователь не найден"));
         Long userId = user.getId();
         Course course = courseRepository.findById(id).orElse(null);
@@ -181,10 +180,38 @@ public class CourseController {
     @PostMapping("/{id}/unenroll")
     @Transactional
     public ResponseEntity<?> unenroll(@PathVariable Long id, Authentication auth) {
-        User user = userRepository.findByEmail(auth.getName()).orElseThrow();
+        User user = resolveCurrentUserOrThrow(auth);
         Enrollment enrollment = enrollmentRepository.findByCourseIdAndUserId(id, user.getId()).orElse(null);
         if (enrollment == null) return ResponseEntity.badRequest().body(Map.of("error", "Вы не записаны на этот курс"));
         enrollmentRepository.delete(enrollment);
         return ResponseEntity.ok(Map.of("message", "Вы отписались от курса"));
+    }
+
+    private User resolveCurrentUserOrThrow(Authentication auth) {
+        User user = resolveCurrentUser(auth);
+        if (user == null) {
+            throw new IllegalStateException("Пользователь не найден");
+        }
+        return user;
+    }
+
+    private User resolveCurrentUser(Authentication auth) {
+        String email = extractEmail(auth);
+        return email == null ? null : userRepository.findByEmail(email.toLowerCase()).orElse(null);
+    }
+
+    private String extractEmail(Authentication auth) {
+        if (auth == null || !auth.isAuthenticated()) {
+            return null;
+        }
+        Object principal = auth.getPrincipal();
+        if (principal instanceof OAuth2User oauthUser) {
+            String email = oauthUser.getAttribute("default_email");
+            if (email == null || email.isBlank()) {
+                email = oauthUser.getAttribute("email");
+            }
+            return email;
+        }
+        return auth.getName();
     }
 }
