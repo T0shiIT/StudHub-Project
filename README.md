@@ -33,3 +33,55 @@
 | **Обратный прокси** | Nginx |
 | **CI/CD** | GitHub Actions |
 | **Система контроля версий** | Git, GitHub |
+
+# 🎓 StudHub — Учебная платформа
+
+**StudHub** — это современная веб-платформа для автоматизации и централизации учебного процесса в высших учебных заведениях. Система объединяет управление курсами, журнал успеваемости, парсер расписания, мессенджер реального времени и систему объявлений в едином интерфейсе.
+
+Проект реализован по **микросервисной архитектуре** с использованием 5 языков программирования, полностью контейнеризирован с помощью **Docker** и оснащён автоматизированным конвейером **CI/CD** на базе **GitHub Actions**.
+
+---
+
+## ✨ Основные возможности
+
+- 🔐 **Аутентификация и авторизация** — регистрация по email, вход через логин/пароль, OAuth2 через ВКонтакте и Яндекс. Система ролей: Студент, Преподаватель, Администратор.
+- 📚 **Управление курсами** — создание курсов, добавление секций и материалов (файлы, ссылки, тесты, задания). Запись студентов на курсы.
+- 📊 **Электронный журнал** — выставление и редактирование оценок преподавателем, просмотр успеваемости студентом с цветовой индикацией.
+- 📅 **Расписание** — загрузка расписания в формате XLSX, автоматический парсинг с выделением пар, дней недели и групп, уведомление о ближайшем занятии.
+- 💬 **Мессенджер** — обмен сообщениями в реальном времени через WebSocket, история переписки в Redis.
+- 📢 **Объявления** — публикация объявлений преподавателями и администраторами, просмотр в ленте.
+- 👤 **Профиль пользователя** — управление аватаром (выбор из библиотеки), указание группы, написание «о себе».
+
+---
+
+## 🛠️ Стек технологий
+
+| Компонент | Технологии |
+|-----------|------------|
+| **Frontend** | React 18, TypeScript, Vite, Tailwind CSS, Axios |
+| **Backend API** | Java 17, Spring Boot 3.2, Spring Security, Spring Data JPA |
+| **Messenger** | Go, Gorilla WebSocket |
+| **Parser** | Python 3.11, FastAPI, openpyxl, pandas |
+| **Database Service** | C++, libpqxx |
+| **База данных** | PostgreSQL 15 |
+| **Кэш / Сессии / Чат** | Redis 7 |
+| **Контейнеризация** | Docker, Docker Compose |
+| **Обратный прокси** | Nginx |
+| **CI/CD** | GitHub Actions |
+| **Система контроля версий** | Git, GitHub |
+
+## 👥 Участники проекта
+
+| № | Модуль | Участники |
+|---|--------|-----------|
+| 1 | 🔐 Аутентификация и авторизация | [CosGetHub](https://github.com/CosGeHoh) |
+| 2 | 📚 Управление курсами | [dmitryiuigraph-arch](https://github.com/dmitryiuigraph-arch), [T0shiIT](https://github.com/T0shiIT) |
+| 3 | 📊 Электронный журнал | [dmitryiuigraph-arch](https://github.com/dmitryiuigraph-arch), [AlenchenkoAnna](https://github.com/AlenchenkoAnna), [T0shiIT](https://github.com/T0shiIT) |
+| 4 | 📅 Расписание | [dmitryiuigraph-arch](https://github.com/dmitryiuigraph-arch), [CosGetHub](https://github.com/CosGeHoh) |
+| 5 | 💬 Мессенджер | [brnhxxb](https://github.com/brnhxxb) |
+| 6 | 📢 Объявления | [dmitryiuigraph-arch](https://github.com/dmitryiuigraph-arch), [TolstykhIvan](https://github.com/TolstykhIvan), [T0shiIT](https://github.com/T0shiIT) |
+| 7 | 👤 Профиль пользователя | [TolstykhIvan](https://github.com/TolstykhIvan), [T0shiIT](https://github.com/T0shiIT) |
+| 8 | 🔔 Уведомления | [TolstykhIvan](https://github.com/TolstykhIvan), [T0shiIT](https://github.com/T0shiIT) |
+| 9 | 🗳 Тесты | [brnhxxb](https://github.com/brnhxxb)|
+| 10 | 🗃 База данных | [brnhxxb](https://github.com/brnhxxb)|
+
