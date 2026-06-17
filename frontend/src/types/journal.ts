@@ -11,7 +11,7 @@ export interface JournalData {
   dates: string[];
   grades: {
     [studentId: number]: {
-      [date: string]: string | null;
+      [date: string]: number | null;
     };
   };
 }

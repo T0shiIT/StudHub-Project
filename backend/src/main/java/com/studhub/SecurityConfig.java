@@ -31,7 +31,7 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            SecurityContextRepository securityContextRepository,
                                            OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler,
-                                           @Value("${frontend.url:https://45.146.165.184.sslip.io}") String frontendUrl) throws Exception {
+                                           @Value("${frontend.url:http://localhost:5173}") String frontendUrl) throws Exception {
 
         CsrfTokenRequestAttributeHandler csrfHandler = new CsrfTokenRequestAttributeHandler();
         csrfHandler.setCsrfRequestAttributeName(null);
@@ -110,8 +110,8 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource(
-            @Value("${frontend.url:https://45.146.165.184.sslip.io}") String frontendUrl,
-            @Value("${app.backend.url:https://45.146.165.184.sslip.io}") String backendUrl) {
+            @Value("${frontend.url:http://localhost:5173}") String frontendUrl,
+            @Value("${app.backend.url:http://localhost:8080}") String backendUrl) {
         CorsConfiguration cfg = new CorsConfiguration();
         cfg.setAllowedOrigins(List.of(
                 frontendUrl,
