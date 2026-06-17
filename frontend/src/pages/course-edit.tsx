@@ -37,7 +37,7 @@ export default function CourseEditPage() {
           setCoverImage(data.coverImage || '');
           setStatus(data.status || 'ACTIVE');
 
-          if (user?.role !== 'ADMIN' && data.teacherId !== user.id) {
+          if (!user || (user.role !== 'ADMIN' && data.teacherId !== user.id)) {
             navigate(`/courses/${id}`);
           }
         } else {

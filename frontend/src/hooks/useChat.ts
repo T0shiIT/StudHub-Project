@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-const API_BASE = '';
 const WS_BASE = '';
 
 export interface ChatMessage {

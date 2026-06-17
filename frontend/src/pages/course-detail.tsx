@@ -11,6 +11,7 @@ interface Course {
   teacherName?: string;
   coverImage?: string;
   status?: string;
+  enrolled?: boolean;
 }
 
 interface Section {

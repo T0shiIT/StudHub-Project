@@ -5,9 +5,11 @@ interface User {
   id: number;
   login: string;
   email: string;
+  default_email?: string;
   firstName: string;
   lastName: string;
   group?: string;
+  groupName?: string;
   role: string;
 }
 

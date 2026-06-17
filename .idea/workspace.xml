@@ -5,11 +5,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="65e3d192-1b42-4e73-826d-9f71c78b1e09" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/api/groups.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/api/groups.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/pages/profile.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/pages/profile.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/pages/schedule.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/pages/schedule.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/pages/welcome.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/pages/welcome.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/context/AuthContext.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/context/AuthContext.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/hooks/useChat.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/hooks/useChat.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/pages/course-detail.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/pages/course-detail.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/pages/course-edit.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/pages/course-edit.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/pages/courses.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/pages/courses.tsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -27,16 +29,16 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "agent.project.rule.migration.done": "true",
-    "git-widget-placeholder": "main",
-    "settings.editor.selected.configurable": "com.explyt.plugin.intellij.settings3.d"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;agent.project.rule.migration.done&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.explyt.plugin.intellij.settings3.d&quot;
   }
-}]]></component>
+}</component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
       <changelist id="65e3d192-1b42-4e73-826d-9f71c78b1e09" name="Changes" comment="" />

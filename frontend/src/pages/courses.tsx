@@ -67,7 +67,7 @@ export default function CoursesPage() {
         coursesData = enriched;
       }
 
-      let finalCourses = coursesData.map((c) => ({
+      let finalCourses: Course[] = coursesData.map((c) => ({
         ...c,
         enrollmentCount: c.enrollmentCount ?? 0,
         enrolled: c.enrolled ?? false,
@@ -79,7 +79,7 @@ export default function CoursesPage() {
         const withProgress = await Promise.all(
           finalCourses.map(async (course) => {
             let canViewProgress = false;
-            if (user.role === 'STUDENT') canViewProgress = course.enrolled;
+            if (user.role === 'STUDENT') canViewProgress = course.enrolled === true;
             else if (user.role === 'TEACHER') canViewProgress = course.teacherId === user.id;
             else if (user.role === 'ADMIN') canViewProgress = true;
 
